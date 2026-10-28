@@ -66,8 +66,14 @@ async function build() {
     passages = corpus.map((text) => ({ text, vector: [] }))
     return
   }
-  const vectors = await zhipuEmbed(corpus)
-  passages = corpus.map((text, i) => ({ text, vector: vectors[i] }))
+  try {
+    const vectors = await zhipuEmbed(corpus)
+    passages = corpus.map((text, i) => ({ text, vector: vectors[i] }))
+  } catch (e: any) {
+    // Key 无效/配额不足等：降级为关键词模式，不让知识库阻塞服务
+    console.error('[rag] 向量化失败，降级关键词检索：', e?.message)
+    passages = corpus.map((text) => ({ text, vector: [] }))
+  }
 }
 
 export async function ensureIndex(): Promise<void> {
@@ -85,17 +91,31 @@ export async function retrieve(query: string, k = 4): Promise<string[]> {
   if (!hasKey() || !passages[0].vector.length) {
     const shingles = new Set<string>()
     for (let i = 0; i < query.length - 1; i++) shingles.add(query.slice(i, i + 2))
-    return passages
-      .map((p) => ({ p, s: [...shingles].filter((w) => p.text.includes(w)).length }))
-      .filter((x) => x.s > 0)
-      .sort((a, b) => b.s - a.s)
-      .slice(0, k)
-      .map((x) => x.p.text)
+    return keywordSearch(shingles, k)
   }
 
-  const [qv] = await zhipuEmbed([query])
+  const shingles = new Set<string>()
+  for (let i = 0; i < query.length - 1; i++) shingles.add(query.slice(i, i + 2))
+
+  let qv: number[]
+  try {
+    ;[qv] = await zhipuEmbed([query])
+  } catch (e: any) {
+    // 查询向量化失败：降级关键词
+    console.error('[rag] 查询向量化失败，降级关键词：', e?.message)
+    return keywordSearch(shingles, k)
+  }
   return [...passages]
     .map((p) => ({ p, s: cosine(qv, p.vector) }))
+    .sort((a, b) => b.s - a.s)
+    .slice(0, k)
+    .map((x) => x.p.text)
+}
+
+function keywordSearch(shingles: Set<string>, k: number): string[] {
+  return (passages ?? [])
+    .map((p) => ({ p, s: [...shingles].filter((w) => p.text.includes(w)).length }))
+    .filter((x) => x.s > 0)
     .sort((a, b) => b.s - a.s)
     .slice(0, k)
     .map((x) => x.p.text)
