@@ -9,15 +9,25 @@ interface ChatMsg {
   streaming?: boolean
 }
 
-const messages = ref<ChatMsg[]>([
-  {
-    role: 'assistant',
-    text: '你好，我是你的 AI 营养师 🥗 可以问我：今天吃得怎么样？帮我排个减脂食谱？蛋白质吃够了吗？'
-  }
-])
+const messages = ref<ChatMsg[]>([])
 const input = ref('')
 const busy = ref(false)
 const listEl = ref<HTMLElement>()
+const diet = useDietStore()
+
+// 首条欢迎语（含今日摄入摘要，展示 Agent 的上下文感知能力）
+onMounted(() => {
+  const t = diet.todayTotals
+  const g = diet.dailyGoals
+  const summary =
+    t.kcal > 0
+      ? `我看了你的记录：今天已摄入约 ${Math.round(t.kcal)} kcal（目标 ${g.kcal} kcal），蛋白质 ${t.protein.toFixed(1)}/${g.protein}g。`
+      : '今天还没有饮食记录，可以先去「今日餐盘」拍一张餐盘照片。'
+  messages.value.push({
+    role: 'assistant',
+    text: `你好，我是你的 AI 营养师 🥗 ${summary}\n可以问我：今天吃得怎么样？帮我排个食谱？蛋白质吃够了吗？`
+  })
+})
 
 const suggestions = ['帮我评估一下今天的饮食', '帮我排一份减脂食谱', '增肌该怎么吃？']
 
@@ -39,7 +49,10 @@ async function send(text?: string) {
   try {
     await streamSSE(
       '/api/chat',
-      { messages: messages.value.filter((m) => !m.streaming).map(({ role, text }) => ({ role, text })) },
+      {
+        messages: messages.value.filter((m) => !m.streaming).map(({ role, text }) => ({ role, text })),
+        context: { today: { totals: diet.todayTotals, goals: diet.dailyGoals } }
+      },
       (e) => {
         if (e.type === 'tool') reply.tools?.push(e.label ?? '调用工具')
         else if (e.type === 'text') reply.text += e.text ?? ''
