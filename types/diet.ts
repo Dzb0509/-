@@ -32,6 +32,8 @@ export interface FoodRecord {
 
 export type GoalType = 'lose' | 'keep' | 'gain'
 
+import type { PopulationId } from './recommend'
+
 export interface UserProfile {
   nickname: string
   gender: 'male' | 'female'
@@ -39,6 +41,8 @@ export interface UserProfile {
   height: number
   weight: number
   goal: GoalType
+  /** 人群定位：均衡/减脂/增肌/控糖（驱动每日推荐） */
+  population: PopulationId
 }
 
 /** 计算某食物按当前克重的营养总量 */

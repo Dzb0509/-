@@ -12,6 +12,9 @@ interface ClientMessage {
 }
 interface ChatContext {
   today?: { totals: { kcal: number; protein: number; fat: number; carb: number }; goals: { kcal: number; protein: number; fat: number; carb: number } }
+  population?: string
+  yesterday?: string[]
+  taste?: { flavors?: Record<string, number>; regions?: Record<string, number>; ingredients?: Record<string, number> }
 }
 
 const TOOLS = [
@@ -120,7 +123,12 @@ export default defineEventHandler(async (event) => {
       content:
         SYSTEM_BASE +
         (passages.length ? `\n【营养知识参考】\n${passages.map((p, i) => `${i + 1}. ${p}`).join('\n')}` : '') +
-        (ctx.today ? `\n【今日摄入】已摄入${Math.round(ctx.today.totals.kcal)}kcal（目标${ctx.today.goals.kcal}kcal），蛋白质${ctx.today.totals.protein.toFixed(1)}/${ctx.today.goals.protein}g` : '')
+        (ctx.today ? `\n【今日摄入】已摄入${Math.round(ctx.today.totals.kcal)}kcal（目标${ctx.today.goals.kcal}kcal），蛋白质${ctx.today.totals.protein.toFixed(1)}/${ctx.today.goals.protein}g` : '') +
+        (ctx.population ? `\n【人群定位】${ { balance: '均衡饮食', lose: '减脂控卡', muscle: '增肌塑形', sugar: '控糖稳糖' }[ctx.population] ?? ctx.population }` : '') +
+        (ctx.yesterday?.length ? `\n【昨日饮食】${ctx.yesterday.join('、')}` : '') +
+        (ctx.taste && Object.keys(ctx.taste.flavors ?? {}).length
+          ? `\n【口味画像】偏好：${Object.entries(ctx.taste.flavors).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([k]) => k).join('、')}${Object.keys(ctx.taste.regions ?? {}).length ? `；常吃菜系：${Object.entries(ctx.taste.regions).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k]) => k).join('、')}` : ''}`
+          : '')
     },
     ...history.map((m) => ({ role: m.role, content: m.text }))
   ]

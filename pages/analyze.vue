@@ -68,7 +68,7 @@ function confirm() {
 
 function backHome() {
   diet.pending = null
-  router.push('/')
+  router.push('/record')
 }
 
 // 生成式图表卡片：宏量营养素供能占比（点评完成后动态渲染）
@@ -115,7 +115,7 @@ onUnmounted(() => aborter?.abort())
     <div v-if="!diet.pending" class="card text-center py-14 space-y-3">
       <p class="text-4xl">🍽️</p>
       <p class="text-slate-500">还没有待确认的识餐结果</p>
-      <NuxtLink to="/" class="btn-primary">去拍照识餐</NuxtLink>
+      <NuxtLink to="/record" class="btn-primary">去饮食记录页拍照</NuxtLink>
     </div>
 
     <template v-else>

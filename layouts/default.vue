@@ -1,6 +1,8 @@
 <script setup lang="ts">
 const navItems = [
-  { to: '/', label: '今日餐盘', icon: 'plate' },
+  { to: '/', label: '今日推荐', icon: 'plate' },
+  { to: '/explore', label: '地方特色', icon: 'explore' },
+  { to: '/record', label: '饮食记录', icon: 'record' },
   { to: '/chat', label: 'AI 营养师', icon: 'chat' },
   { to: '/report', label: '周报', icon: 'report' },
   { to: '/profile', label: '我的', icon: 'profile' }
@@ -10,7 +12,7 @@ const navItems = [
 <template>
   <div class="flex min-h-screen">
     <!-- 桌面侧边栏 -->
-    <aside class="hidden md:flex flex-col w-56 shrink-0 border-r border-slate-100 bg-white px-4 py-6">
+    <aside class="hidden md:flex flex-col w-60 shrink-0 border-r border-slate-100 bg-white px-4 py-6">
       <NuxtLink to="/" class="flex items-center gap-2.5 px-2 mb-8">
         <span class="w-9 h-9 rounded-xl bg-primary-50 flex items-center justify-center text-xl">🥗</span>
         <span class="text-lg font-bold tracking-tight">食刻 AI</span>
@@ -32,12 +34,14 @@ const navItems = [
       </p>
     </aside>
 
-    <!-- 主内容区 -->
+    <!-- 主内容区（PC 宽幅） -->
     <main class="flex-1 min-w-0 pb-20 md:pb-0">
-      <slot />
+      <div class="max-w-6xl mx-auto px-6 lg:px-10 py-8">
+        <slot />
+      </div>
     </main>
 
-    <!-- 移动端底部导航 -->
+    <!-- 移动端底部导航（兼容小屏） -->
     <nav class="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-slate-100 flex pb-[env(safe-area-inset-bottom)]">
       <NuxtLink
         v-for="item in navItems"

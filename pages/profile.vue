@@ -1,7 +1,10 @@
 <script setup lang="ts">
 /**
- * 个人档案：基本信息 + 目标 → 每日营养目标自动计算
+ * 个人档案：基本信息 + 人群定位 + 目标 → 每日营养目标自动计算 + 口味画像
  */
+import { POPULATIONS, type PopulationId } from '~/types/recommend'
+import { topEntries } from '~/types/taste'
+
 const diet = useDietStore()
 const form = reactive({ ...diet.profile })
 
@@ -10,6 +13,18 @@ const goalOptions = [
   { value: 'keep', label: '保持' },
   { value: 'gain', label: '增肌' }
 ]
+
+function setPopulation(pop: PopulationId) {
+  form.population = pop
+  diet.updateProfile({ population: pop })
+  ElMessage.success('人群已切换，今日推荐将按此重新生成')
+}
+
+const taste = computed(() => ({
+  flavors: topEntries(diet.tasteProfile.flavors as Record<string, number>, 6),
+  regions: topEntries(diet.tasteProfile.regions, 4),
+  ingredients: topEntries(diet.tasteProfile.ingredients, 6)
+}))
 
 function save() {
   diet.updateProfile({ ...form })
@@ -45,6 +60,56 @@ function save() {
       <p class="text-[11px] text-slate-400 mt-3">
         基于 Mifflin-St Jeor 公式估算基础代谢，按中等活动系数与你的目标调整；正式版将接入 AI 个性化解读。
       </p>
+    </section>
+
+    <!-- 人群定位（驱动每日推荐） -->
+    <section class="card">
+      <h2 class="font-semibold mb-1">人群定位</h2>
+      <p class="text-[11px] text-slate-400 mb-4">首页的每日三餐推荐将按你的人群自动调整能量与营养结构</p>
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <button
+          v-for="p in POPULATIONS"
+          :key="p.id"
+          class="rounded-xl border-2 p-3 text-left transition-all"
+          :class="form.population === p.id ? 'border-primary-400 bg-primary-50/50 ring-1 ring-primary-100' : 'border-slate-100 hover:border-primary-100'"
+          @click="setPopulation(p.id)"
+        >
+          <span class="text-lg">{{ p.emoji }}</span>
+          <p class="font-semibold text-sm">{{ p.label }}</p>
+          <p class="text-[11px] text-slate-400">{{ p.desc }}</p>
+        </button>
+      </div>
+    </section>
+
+    <!-- 口味画像 -->
+    <section class="card">
+      <h2 class="font-semibold mb-1">口味画像</h2>
+      <p class="text-[11px] text-slate-400 mb-4">
+        AI 从你的 {{ diet.records.length }} 条饮食记录中自动学习（也可在对话页直接告诉 AI 你的忌口与偏好）
+      </p>
+      <template v-if="taste.flavors.length">
+        <div class="space-y-3">
+          <div>
+            <p class="text-xs font-semibold text-slate-500 mb-1.5">口味偏好</p>
+            <div class="flex flex-wrap gap-1.5">
+              <span v-for="f in taste.flavors" :key="f" class="chip bg-primary-50 text-primary-700">{{ f }}</span>
+            </div>
+          </div>
+          <div v-if="taste.regions.length">
+            <p class="text-xs font-semibold text-slate-500 mb-1.5">菜系偏好</p>
+            <div class="flex flex-wrap gap-1.5">
+              <span v-for="r in taste.regions" :key="r" class="chip bg-amber-50 text-amber-600">{{ r }}</span>
+            </div>
+          </div>
+          <div v-if="taste.ingredients.length">
+            <p class="text-xs font-semibold text-slate-500 mb-1.5">常吃食材</p>
+            <div class="flex flex-wrap gap-1.5">
+              <span v-for="i in taste.ingredients" :key="i" class="chip bg-slate-100 text-slate-600">{{ i }}</span>
+            </div>
+          </div>
+        </div>
+      </template>
+      <p v-else class="text-sm text-slate-400">暂无数据 — 记录几餐后这里会自动长出你的画像 🌱</p>
     </section>
 
     <!-- 基本信息 -->

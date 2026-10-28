@@ -3,6 +3,7 @@
  * 上传卡片：点击/拖拽选择食物照片 → 压缩 → 调用识餐接口 → 进入结果页
  */
 const diet = useDietStore()
+const props = withDefaults(defineProps<{ compact?: boolean }>(), { compact: false })
 const fileInput = ref<HTMLInputElement>()
 const dragging = ref(false)
 const loading = ref(false)
@@ -55,16 +56,17 @@ async function handleFile(file: File) {
     @drop.prevent="onDrop"
   >
     <input ref="fileInput" type="file" accept="image/*" class="hidden" @change="onChange" />
-    <div class="flex flex-col items-center justify-center gap-3 py-10 px-6 text-center">
+    <div class="flex flex-col items-center justify-center gap-3 text-center" :class="props.compact ? 'py-6 px-4' : 'py-10 px-6'">
       <div
-        class="w-16 h-16 rounded-2xl bg-primary-50 flex items-center justify-center text-3xl transition-transform group-hover:scale-105"
+        class="bg-primary-50 flex items-center justify-center transition-transform group-hover:scale-105"
+        :class="[props.compact ? 'w-10 h-10 text-xl rounded-xl' : 'w-16 h-16 text-3xl rounded-2xl']"
         :class="{ 'animate-bounce': loading }"
       >
         📷
       </div>
       <template v-if="!loading">
-        <p class="font-semibold">拍一张或上传餐盘照片</p>
-        <p class="text-sm text-slate-400">AI 自动识别菜品、估算份量与营养 · 支持拖拽</p>
+        <p class="font-semibold" :class="props.compact && 'text-sm'">{{ props.compact ? '拍照识餐' : '拍一张或上传餐盘照片' }}</p>
+        <p class="text-sm text-slate-400">{{ props.compact ? 'AI 识别菜品与营养' : 'AI 自动识别菜品、估算份量与营养 · 支持拖拽' }}</p>
       </template>
       <template v-else>
         <p class="font-semibold text-primary-600">AI 正在识别…</p>

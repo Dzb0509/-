@@ -1,6 +1,8 @@
 import { defineStore } from 'pinia'
 import type { FoodItem, FoodRecord, UserProfile } from '~/types/diet'
+import type { Dish, PopulationId } from '~/types/recommend'
 import { sumNutrition, guessMeal } from '~/types/diet'
+import { learnTaste, emptyTaste, type TasteProfile } from '~/types/taste'
 
 const STORAGE_KEY = 'shike-ai-store-v1'
 
@@ -10,7 +12,8 @@ const DEFAULT_PROFILE: UserProfile = {
   age: 20,
   height: 172,
   weight: 62,
-  goal: 'keep'
+  goal: 'keep',
+  population: 'balance' as PopulationId
 }
 
 function loadPersisted() {
@@ -58,6 +61,25 @@ export const useDietStore = defineStore('diet', {
       const fat = Math.round((kcal * 0.25) / 9)
       const carb = Math.round((kcal - protein * 4 - fat * 9) / 4)
       return { kcal, protein, fat, carb }
+    },
+    /** 昨日饮食记录（用于「根据昨天推荐今天/明天」） */
+    yesterdayRecords(state): FoodRecord[] {
+      const y = new Date()
+      y.setDate(y.getDate() - 1)
+      y.setHours(0, 0, 0, 0)
+      const start = y.getTime()
+      const end = start + 86400_000
+      return state.records.filter((r) => r.time >= start && r.time < end)
+    },
+    /** 昨日吃过的食物/菜名列表 */
+    yesterdayNames(): string[] {
+      return [...new Set(this.yesterdayRecords.flatMap((r) => r.foods.map((f) => f.name)))]
+    },
+    /** 口味画像：从全部历史记录自动学习（越记越准） */
+    tasteProfile(state): TasteProfile {
+      let t = emptyTaste()
+      for (const r of state.records) t = learnTaste(t, r.foods.map((f) => f.name))
+      return t
     }
   },
 
@@ -85,6 +107,25 @@ export const useDietStore = defineStore('diet', {
     },
     updateProfile(profile: Partial<UserProfile>) {
       this.profile = { ...this.profile, ...profile }
+      this.persist()
+    },
+    /** 把一道推荐菜按单人份写入今日餐盘（蛋白质等按菜品整份营养计算） */
+    addDish(dish: Dish, meal: FoodRecord['meal'] = guessMeal()) {
+      const item: FoodItem = {
+        id: `${dish.id}-${Date.now()}`,
+        name: dish.name,
+        grams: 100,
+        confidence: 1,
+        // 菜品营养为单人份总量：借 grams=100 + per100 使 foodNutrition() 恰好还原
+        per100: { ...dish.nutrition }
+      }
+      const record: FoodRecord = {
+        id: `r-${Date.now()}`,
+        meal,
+        time: Date.now(),
+        foods: [item]
+      }
+      this.records.unshift(record)
       this.persist()
     },
     persist() {

@@ -31,7 +31,8 @@ export default <Partial<Config>>{
         sans: ['system-ui', 'PingFang SC', 'Microsoft YaHei', 'sans-serif']
       },
       boxShadow: {
-        card: '0 1px 3px rgba(16, 185, 129, 0.08), 0 4px 16px rgba(0, 0, 0, 0.06)'
+        card: '0 1px 3px rgba(16, 185, 129, 0.08), 0 4px 16px rgba(0, 0, 0, 0.06)',
+        'card-hover': '0 2px 6px rgba(16, 185, 129, 0.12), 0 10px 28px rgba(0, 0, 0, 0.10)'
       }
     }
   }

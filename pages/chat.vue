@@ -51,7 +51,12 @@ async function send(text?: string) {
       '/api/chat',
       {
         messages: messages.value.filter((m) => !m.streaming).map(({ role, text }) => ({ role, text })),
-        context: { today: { totals: diet.todayTotals, goals: diet.dailyGoals } }
+        context: {
+          today: { totals: diet.todayTotals, goals: diet.dailyGoals },
+          population: diet.profile.population,
+          yesterday: diet.yesterdayNames,
+          taste: diet.tasteProfile
+        }
       },
       (e) => {
         if (e.type === 'tool') reply.tools?.push(e.label ?? '调用工具')
