@@ -5,6 +5,8 @@
 const props = defineProps<{ food: FoodItem; editable?: boolean }>()
 const emit = defineEmits<{ remove: [] }>()
 
+import { foodNutrition } from '~/types/diet'
+
 const nutrition = computed(() => foodNutrition(props.food))
 const lowConfidence = computed(() => props.food.confidence < 0.8)
 

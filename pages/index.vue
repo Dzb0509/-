@@ -1,6 +1,8 @@
 <script setup lang="ts">
 const diet = useDietStore()
 
+import { MEAL_LABELS } from '~/types/diet'
+
 const greeting = computed(() => {
   const h = new Date().getHours()
   if (h < 6) return '夜深了'

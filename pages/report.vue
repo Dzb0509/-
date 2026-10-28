@@ -4,6 +4,8 @@
  */
 const diet = useDietStore()
 
+import { sumNutrition } from '~/types/diet'
+
 // 近 7 天日期标签
 const days = Array.from({ length: 7 }, (_, i) => {
   const d = new Date()

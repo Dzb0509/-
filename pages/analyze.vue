@@ -5,6 +5,8 @@
 const diet = useDietStore()
 const router = useRouter()
 
+import { sumNutrition } from '~/types/diet'
+
 const stages = ['视觉识别', '检索膳食指南', '生成点评']
 const currentStage = ref(0)
 
