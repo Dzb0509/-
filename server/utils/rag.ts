@@ -5,7 +5,7 @@
  * 兜底 = 无 API Key 时降级为关键词匹配
  */
 import { FOOD_DB } from './foodDb'
-import { zhipuEmbed, hasKey } from './zhipu'
+import { textConfig, embed, hasTextKey } from './zhipu'
 
 /** 《中国居民膳食指南（2022）》核心条目精编 */
 const GUIDELINE_PASSAGES: string[] = [
@@ -61,13 +61,14 @@ function buildCorpus(): string[] {
 
 async function build() {
   const corpus = buildCorpus()
-  if (!hasKey()) {
-    // 无 Key：仅建文本索引（走关键词兜底）
+  // 向量化仅智谱等提供 embeddings 的服务支持；DeepSeek 等直接走关键词
+  if (!hasTextKey() || !textConfig().base.includes('bigmodel')) {
+    // 无 Key 或不支持的 provider：仅建文本索引（走关键词兜底）
     passages = corpus.map((text) => ({ text, vector: [] }))
     return
   }
   try {
-    const vectors = await zhipuEmbed(corpus)
+    const vectors = await embed(corpus)
     passages = corpus.map((text, i) => ({ text, vector: vectors[i] }))
   } catch (e: any) {
     // Key 无效/配额不足等：降级为关键词模式，不让知识库阻塞服务
@@ -87,19 +88,17 @@ export async function retrieve(query: string, k = 4): Promise<string[]> {
   await ensureIndex()
   if (!passages?.length) return []
 
-  // 无 Key 或索引未向量化：2-gram 关键词兜底
-  if (!hasKey() || !passages[0].vector.length) {
-    const shingles = new Set<string>()
-    for (let i = 0; i < query.length - 1; i++) shingles.add(query.slice(i, i + 2))
-    return keywordSearch(shingles, k)
-  }
-
   const shingles = new Set<string>()
   for (let i = 0; i < query.length - 1; i++) shingles.add(query.slice(i, i + 2))
 
+  // 无 Key、provider 不支持或索引未向量化：关键词兜底
+  if (!hasTextKey() || !textConfig().base.includes('bigmodel') || !passages[0].vector.length) {
+    return keywordSearch(shingles, k)
+  }
+
   let qv: number[]
   try {
-    ;[qv] = await zhipuEmbed([query])
+    ;[qv] = await embed([query])
   } catch (e: any) {
     // 查询向量化失败：降级关键词
     console.error('[rag] 查询向量化失败，降级关键词：', e?.message)

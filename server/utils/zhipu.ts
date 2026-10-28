@@ -1,26 +1,58 @@
-/** 智谱 AI 开放平台接入层（OpenAI 兼容协议） */
+/**
+ * 通用 OpenAI 兼容大模型接入层
+ * 文本链路可通过环境变量切换到 DeepSeek 等任何兼容服务：
+ *   LLM_BASE_URL=https://api.deepseek.com
+ *   LLM_API_KEY=sk-xxx
+ *   NUXT_CHAT_MODEL=deepseek-chat
+ * 视觉链路默认走智谱 GLM-4V（DeepSeek 无视觉 API，如需切换可配 VISION_*）
+ */
 
-const BASE = 'https://open.bigmodel.cn/api/paas/v4'
+export interface ProviderConfig {
+  base: string
+  key: string
+  model: string
+}
 
-export const zhipuKey = () => process.env.ZHIPU_API_KEY || ''
-export const hasKey = () => zhipuKey().length > 10
-export const visionModel = () => process.env.NUXT_VISION_MODEL || 'glm-4v-flash'
-export const chatModel = () => process.env.NUXT_CHAT_MODEL || 'glm-4-flash'
-export const embedModel = () => process.env.NUXT_EMBEDDING_MODEL || 'embedding-3'
+/** 文本/对话模型配置（点评、Agent、周报） */
+export function textConfig(): ProviderConfig {
+  const base = process.env.LLM_BASE_URL || 'https://open.bigmodel.cn/api/paas/v4'
+  let model = process.env.NUXT_CHAT_MODEL || ''
+  if (!model) model = base.includes('deepseek') ? 'deepseek-chat' : 'glm-4-flash'
+  return {
+    base: base.replace(/\/$/, ''),
+    key: process.env.LLM_API_KEY || process.env.ZHIPU_API_KEY || '',
+    model
+  }
+}
 
-export interface ZhipuMessage {
+/** 视觉模型配置（识餐） */
+export function visionConfig(): ProviderConfig {
+  const base = process.env.VISION_BASE_URL || 'https://open.bigmodel.cn/api/paas/v4'
+  const model = process.env.NUXT_VISION_MODEL || 'glm-4v-flash'
+  return {
+    base: base.replace(/\/$/, ''),
+    key: process.env.VISION_API_KEY || process.env.ZHIPU_API_KEY || '',
+    model
+  }
+}
+
+export const hasTextKey = () => textConfig().key.length > 10
+export const hasVisionKey = () => visionConfig().key.length > 10
+
+export interface LLMMessage {
   role: 'system' | 'user' | 'assistant' | 'tool'
   content: any
   tool_call_id?: string
 }
 
-/** 非流式对话 */
-export async function zhipuChat(messages: ZhipuMessage[], tools?: any[]) {
-  return $fetch<any>(`${BASE}/chat/completions`, {
+/** 非流式对话（文本模型，支持 Function Calling） */
+export async function llmChat(messages: LLMMessage[], tools?: any[]) {
+  const { base, key, model } = textConfig()
+  return $fetch<any>(`${base}/chat/completions`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${zhipuKey()}` },
+    headers: { Authorization: `Bearer ${key}` },
     body: {
-      model: chatModel(),
+      model,
       messages,
       temperature: 0.6,
       ...(tools?.length ? { tools, tool_choice: 'auto' } : {})
@@ -29,15 +61,16 @@ export async function zhipuChat(messages: ZhipuMessage[], tools?: any[]) {
 }
 
 /** 流式对话（返回原始 Response，配合 pipeOpenAIStream 消费） */
-export async function zhipuChatStream(messages: ZhipuMessage[]): Promise<Response> {
-  return fetch(`${BASE}/chat/completions`, {
+export async function llmChatStream(messages: LLMMessage[]): Promise<Response> {
+  const { base, key, model } = textConfig()
+  return fetch(`${base}/chat/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${zhipuKey()}`
+      Authorization: `Bearer ${key}`
     },
     body: JSON.stringify({
-      model: chatModel(),
+      model,
       messages,
       temperature: 0.6,
       stream: true
@@ -45,12 +78,14 @@ export async function zhipuChatStream(messages: ZhipuMessage[]): Promise<Respons
   })
 }
 
-/** 文本向量化（批量） */
-export async function zhipuEmbed(texts: string[]): Promise<number[][]> {
-  const res = await $fetch<{ data: Array<{ embedding: number[] }> }>(`${BASE}/embeddings`, {
+/** 文本向量化（批量）。仅智谱/兼容服务提供，其他情况由调用方降级 */
+export async function embed(texts: string[]): Promise<number[][]> {
+  const { base, key } = textConfig()
+  const model = process.env.NUXT_EMBEDDING_MODEL || 'embedding-3'
+  const res = await $fetch<{ data: Array<{ embedding: number[] }> }>(`${base}/embeddings`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${zhipuKey()}` },
-    body: { model: embedModel(), input: texts }
+    headers: { Authorization: `Bearer ${key}` },
+    body: { model, input: texts }
   })
   return res.data.map((d) => d.embedding)
 }

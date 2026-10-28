@@ -4,7 +4,7 @@
 import { FOOD_DB } from '../utils/foodDb'
 import { initSSE, pipeOpenAIStream } from '../utils/sse'
 import { retrieve } from '../utils/rag'
-import { hasKey, zhipuChat, zhipuChatStream } from '../utils/zhipu'
+import { hasTextKey, llmChat, llmChatStream } from '../utils/zhipu'
 
 interface ClientMessage {
   role: 'user' | 'assistant'
@@ -88,7 +88,7 @@ export default defineEventHandler(async (event) => {
   const lastUser = [...history].reverse().find((m) => m.role === 'user')?.text ?? ''
 
   // 无 Key：mock 兜底
-  if (!hasKey()) {
+  if (!hasTextKey()) {
     sse.write({ type: 'tool', label: '查询今日饮食记录（mock）' })
     await sleep(500)
     sse.write({ type: 'tool', label: '检索《膳食指南》建议条目（mock）' })
@@ -128,7 +128,7 @@ export default defineEventHandler(async (event) => {
   try {
     // Agent 循环：最多 2 轮工具调用，结束后流式生成最终回答
     for (let round = 0; round < 2; round++) {
-      const res = await zhipuChat(messages, TOOLS)
+      const res = await llmChat(messages, TOOLS)
       const choice = res.choices?.[0]?.message
       const toolCalls = choice?.tool_calls ?? []
 
@@ -159,7 +159,7 @@ export default defineEventHandler(async (event) => {
     }
 
     // 工具轮次用尽：流式生成最终回答
-    const finalRes = await zhipuChatStream(messages)
+    const finalRes = await llmChatStream(messages)
     if (!finalRes.ok) throw new Error(`上游 ${finalRes.status}`)
     await pipeOpenAIStream(finalRes, (e) => sse.write(e))
     sse.write({ type: 'done' })

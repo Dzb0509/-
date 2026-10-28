@@ -4,7 +4,7 @@ import type { FoodItem } from '~/types/diet'
 import { sumNutrition } from '~/types/diet'
 import { initSSE, pipeOpenAIStream } from '../utils/sse'
 import { retrieve } from '../utils/rag'
-import { hasKey, zhipuChatStream } from '../utils/zhipu'
+import { hasTextKey, llmChatStream } from '../utils/zhipu'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{ foods: FoodItem[] }>(event)
@@ -22,7 +22,7 @@ export default defineEventHandler(async (event) => {
     `温馨提示：以上为营养参考建议，不构成医疗诊断。`
 
   // 无 Key：mock 流式
-  if (!hasKey()) {
+  if (!hasTextKey()) {
     sse.write({ type: 'stage', label: '已检索《中国居民膳食指南》相关条目（mock）' })
     await sleep(400)
     for (const ch of MOCK_TEXT) {
@@ -54,7 +54,7 @@ export default defineEventHandler(async (event) => {
 ${passages.map((p, i) => `${i + 1}. ${p}`).join('\n') || '（无）'}`
 
   try {
-    const upstream = await zhipuChatStream([
+    const upstream = await llmChatStream([
       { role: 'system', content: system },
       {
         role: 'user',

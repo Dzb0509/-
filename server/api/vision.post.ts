@@ -1,7 +1,7 @@
 // POST /api/vision —— 识餐接口
 // 有 Key：GLM-4V 多模态识别（Prompt 约束 JSON 输出）；无 Key：mock 兜底
 import { mockRecognize } from '../utils/foodDb'
-import { hasKey, visionModel } from '../utils/zhipu'
+import { hasVisionKey, visionConfig } from '../utils/zhipu'
 import type { FoodItem } from '~/types/diet'
 
 const VISION_PROMPT = `你是营养分析师助手。请识别图片中的食物，对每个菜品：
@@ -24,17 +24,18 @@ export default defineEventHandler(async (event): Promise<{ ok: boolean; source: 
   const body = await readBody<{ image?: string }>(event)
 
   // 无 Key：mock 兜底，保证演示可用
-  if (!hasKey() || !body?.image) {
+  if (!hasVisionKey() || !body?.image) {
     await new Promise((r) => setTimeout(r, 600))
     return { ok: true, source: 'mock', foods: mockRecognize() }
   }
 
+  const { base, key, model } = visionConfig()
   try {
-    const res = await $fetch<any>('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
+    const res = await $fetch<any>(`${base}/chat/completions`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${process.env.ZHIPU_API_KEY}` },
+      headers: { Authorization: `Bearer ${key}` },
       body: {
-        model: visionModel(),
+        model,
         messages: [
           {
             role: 'user',
