@@ -11,13 +11,33 @@ const VISION_PROMPT = `你是营养分析师助手。请识别图片中的食物
 {"foods":[{"name":"菜名","grams":150,"confidence":0.9,"per100":{"kcal":120,"protein":5,"fat":3,"carb":15}}]}
 不要输出任何其他文字。`
 
+/**
+ * 从模型输出中提取第一个完整 JSON 值（括号配对扫描，支持对象/数组，容错尾部杂质）
+ */
 function extractJson(text: string): any {
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/)
-  const raw = fenced ? fenced[1] : text
-  const start = raw.indexOf('{')
-  const end = raw.lastIndexOf('}')
-  if (start === -1 || end === -1) throw new Error('未找到 JSON')
-  return JSON.parse(raw.slice(start, end + 1))
+  const s = text.search(/[{[]/)
+  if (s === -1) throw new Error('未找到 JSON')
+  const open = text[s]
+  const close = open === '{' ? '}' : ']'
+  let depth = 0
+  let inStr = false
+  let esc = false
+  for (let i = s; i < text.length; i++) {
+    const c = text[i]
+    if (inStr) {
+      if (esc) esc = false
+      else if (c === '\\') esc = true
+      else if (c === '"') inStr = false
+      continue
+    }
+    if (c === '"') inStr = true
+    else if (c === open) depth++
+    else if (c === close) {
+      depth--
+      if (depth === 0) return JSON.parse(text.slice(s, i + 1))
+    }
+  }
+  throw new Error('JSON 不完整')
 }
 
 export default defineEventHandler(async (event): Promise<{ ok: boolean; source: string; foods: FoodItem[] }> => {
@@ -50,8 +70,13 @@ export default defineEventHandler(async (event): Promise<{ ok: boolean; source: 
       timeout: 60000
     })
     const text: string = res.choices?.[0]?.message?.content ?? ''
+    console.log('[vision] 模型原始输出：', JSON.stringify(text.slice(0, 500)))
     const parsed = extractJson(text)
-    const foods: FoodItem[] = (parsed.foods ?? []).map((f: any, i: number) => ({
+    // 兼容三种返回：{"foods":[...]}、直接数组、单个食物对象
+    const list: any[] = Array.isArray(parsed)
+      ? parsed
+      : (parsed.foods ?? (parsed.name ? [parsed] : []))
+    const foods: FoodItem[] = list.map((f: any, i: number) => ({
       id: `f-${Date.now()}-${i}`,
       name: String(f.name ?? '未知食物'),
       grams: Math.max(5, Math.min(2000, Math.round(Number(f.grams) || 100))),
