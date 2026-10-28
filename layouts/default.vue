@@ -1,6 +1,7 @@
 <script setup lang="ts">
 const navItems = [
   { to: '/', label: '今日推荐', icon: 'plate' },
+  { to: '/family', label: '家庭食谱', icon: 'family' },
   { to: '/explore', label: '地方特色', icon: 'explore' },
   { to: '/record', label: '饮食记录', icon: 'record' },
   { to: '/chat', label: 'AI 营养师', icon: 'chat' },
@@ -40,6 +41,9 @@ const navItems = [
         <slot />
       </div>
     </main>
+
+    <!-- AI 悬浮小助手（全站右下角） -->
+    <AiMascot />
 
     <!-- 移动端底部导航（兼容小屏） -->
     <nav class="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-slate-100 flex pb-[env(safe-area-inset-bottom)]">

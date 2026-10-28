@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import type { FoodItem, FoodRecord, UserProfile } from '~/types/diet'
-import type { Dish, PopulationId } from '~/types/recommend'
+import type { Dish, FamilyMember, PopulationId } from '~/types/recommend'
 import { sumNutrition, guessMeal } from '~/types/diet'
 import { learnTaste, emptyTaste, type TasteProfile } from '~/types/taste'
 
@@ -32,7 +32,14 @@ export const useDietStore = defineStore('diet', {
     return {
       records: (persisted?.records ?? []) as FoodRecord[],
       profile: (persisted?.profile ?? { ...DEFAULT_PROFILE }) as UserProfile,
-      /** 待确认的识餐结果（首页上传后 → 结果页确认） */
+      /** 家庭成员（家庭模式） */
+      family: (persisted?.family ?? [
+        { id: 'm1', label: '爸爸', age: 40, population: 'balance' },
+        { id: 'm2', label: '妈妈', age: 38, population: 'balance' },
+        { id: 'm3', label: '女儿', age: 10, population: 'child' },
+        { id: 'm4', label: '奶奶', age: 68, population: 'elderly' }
+      ]) as FamilyMember[],
+      /** 待确认的识餐结果（上传后 → 结果页确认） */
       pending: null as { image: string; foods: FoodItem[] } | null
     }
   },
@@ -109,6 +116,19 @@ export const useDietStore = defineStore('diet', {
       this.profile = { ...this.profile, ...profile }
       this.persist()
     },
+    addFamilyMember(m: Omit<FamilyMember, 'id'>) {
+      this.family.push({ ...m, id: `m-${Date.now()}` })
+      this.persist()
+    },
+    removeFamilyMember(id: string) {
+      this.family = this.family.filter((m) => m.id !== id)
+      this.persist()
+    },
+    updateFamilyMember(id: string, patch: Partial<FamilyMember>) {
+      const m = this.family.find((x) => x.id === id)
+      if (m) Object.assign(m, patch)
+      this.persist()
+    },
     /** 把一道推荐菜按单人份写入今日餐盘（蛋白质等按菜品整份营养计算） */
     addDish(dish: Dish, meal: FoodRecord['meal'] = guessMeal()) {
       const item: FoodItem = {
@@ -133,7 +153,7 @@ export const useDietStore = defineStore('diet', {
       // 骨架阶段使用 localStorage；正式版计划升级为 IndexedDB（接口保持一致）
       localStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify({ records: this.records, profile: this.profile })
+        JSON.stringify({ records: this.records, profile: this.profile, family: this.family })
       )
     }
   }

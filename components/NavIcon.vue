@@ -19,10 +19,13 @@ const paths: Record<string, string> = {
     'M12 21a9 9 0 1 1 0-18 9 9 0 0 1 0 18Zm3.5-12.5-2.1 4.9-4.9 2.1 2.1-4.9 4.9-2.1Z',
   // 记事本（饮食记录）
   record:
-    'M7 3h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm2.5 5h5M9.5 12h5M9.5 16h3'
+    'M7 3h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm2.5 5h5M9.5 12h5M9.5 16h3',
+  // 家庭（房子+心）
+  family:
+    'M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-9.5Zm8 8.5c-2.5-1.8-4-3.2-4-5a2.3 2.3 0 0 1 4-1.5A2.3 2.3 0 0 1 16 14c0 1.8-1.5 3.2-4 5Z'
 }
 
-const strokePaths: Record<string, boolean> = { chat: true, report: true, profile: true, explore: true, record: true }
+const strokePaths: Record<string, boolean> = { chat: true, report: true, profile: true, explore: true, record: true, family: true }
 </script>
 
 <template>
