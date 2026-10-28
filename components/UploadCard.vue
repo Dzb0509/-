@@ -59,8 +59,7 @@ async function handleFile(file: File) {
     <div class="flex flex-col items-center justify-center gap-3 text-center" :class="props.compact ? 'py-6 px-4' : 'py-10 px-6'">
       <div
         class="bg-primary-50 flex items-center justify-center transition-transform group-hover:scale-105"
-        :class="[props.compact ? 'w-10 h-10 text-xl rounded-xl' : 'w-16 h-16 text-3xl rounded-2xl']"
-        :class="{ 'animate-bounce': loading }"
+        :class="[{ 'animate-bounce': loading }, props.compact ? 'w-10 h-10 text-xl rounded-xl' : 'w-16 h-16 text-3xl rounded-2xl']"
       >
         📷
       </div>
