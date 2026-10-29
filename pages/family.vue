@@ -33,6 +33,37 @@ const dialogOpen = computed({
   }
 })
 
+// 我家菜谱上传弹窗（食材/步骤按行分割）
+const recipeDialogOpen = ref(false)
+const rName = ref('')
+const rIngredients = ref('')
+const rSteps = ref('')
+const rNote = ref('')
+function openRecipeDialog() {
+  rName.value = ''
+  rIngredients.value = ''
+  rSteps.value = ''
+  rNote.value = ''
+  recipeDialogOpen.value = true
+}
+function saveRecipe() {
+  const name = rName.value.trim()
+  const ingredients = rIngredients.value.split('\n').map((s) => s.trim()).filter(Boolean)
+  const steps = rSteps.value.split('\n').map((s) => s.trim()).filter(Boolean)
+  if (!name) {
+    ElMessage.warning('填一下菜名')
+    return
+  }
+  if (!steps.length) {
+    ElMessage.warning('至少写一步做法')
+    return
+  }
+  diet.addUserRecipe({ name, ingredients, steps, note: rNote.value.trim() || undefined })
+  recipeDialogOpen.value = false
+  ElMessage.success('菜谱已保存，AI 生成全家食谱时会优先安排它')
+  plan.value = null
+}
+
 function saveMemberCustom(pref: CustomPref) {
   if (customMemberId.value) diet.updateFamilyMember(customMemberId.value, { custom: pref })
   plan.value = null
@@ -77,7 +108,8 @@ async function fetchPlan(meals?: ('breakfast' | 'lunch' | 'dinner')[]) {
         day: 'today',
         meals: meals ?? ['breakfast', 'lunch', 'dinner'],
         yesterday: diet.yesterdayNames,
-        taste: diet.tasteProfile
+        taste: diet.tasteProfile,
+        customRecipes: diet.userRecipes
       }
     })
     if (meals?.length && plan.value) {
@@ -200,11 +232,32 @@ const mealKcal = (dishes?: Dish[]) => (dishes ?? []).reduce((s, d) => s + d.nutr
           <button class="btn-secondary !py-1.5 !text-xs w-full" @click="addMember">+ 添加成员</button>
         </div>
 
+        <!-- 我家菜谱：上传后参与全家推荐 -->
+        <div>
+          <div class="flex items-center justify-between">
+            <h3 class="text-sm font-semibold">📖 我家菜谱（{{ diet.userRecipes.length }}）</h3>
+            <button class="text-xs text-primary-600 hover:text-primary-700 font-medium" @click="openRecipeDialog">+ 上传菜谱</button>
+          </div>
+          <div class="mt-2 space-y-1.5">
+            <div
+              v-for="r in diet.userRecipes"
+              :key="r.id"
+              class="flex items-center justify-between rounded bg-orange-50 px-2.5 py-1.5"
+            >
+              <span class="text-xs truncate">🏠 {{ r.name }} <span class="text-slate-400">· {{ r.steps.length }} 步做法</span></span>
+              <button class="text-slate-300 hover:text-red-400 text-xs shrink-0" @click="diet.removeUserRecipe(r.id)">✕</button>
+            </div>
+            <p v-if="!diet.userRecipes.length" class="text-[11px] text-slate-400 leading-relaxed">
+              上传奶奶的拿手菜、宝宝的辅食做法，AI 生成全家食谱时会优先安排它们
+            </p>
+          </div>
+        </div>
+
         <button class="btn-primary w-full" :disabled="loading || !diet.family.length" @click="fetchPlan()">
           {{ loading ? 'AI 正在统筹全家口味…' : '🍜 生成全家最优食谱' }}
         </button>
         <p class="text-[11px] text-slate-400 leading-relaxed">
-          当前覆盖人群：{{ familyPopSummary || '暂无' }}。AI 会避开昨天吃过的菜，并参考家庭口味画像。
+          当前覆盖人群：{{ familyPopSummary || '暂无' }}。AI 会避开昨天吃过的菜，参考家庭口味画像，并结合联网搜索的家常菜谱灵感。
         </p>
       </section>
 
@@ -275,5 +328,25 @@ const mealKcal = (dishes?: Dish[]) => (dishes ?? []).reduce((s, d) => s + d.nutr
       :existing="customEditing.custom ?? null"
       @save="saveMemberCustom"
     />
+
+    <!-- 上传我家菜谱弹窗 -->
+    <el-dialog v-model="recipeDialogOpen" title="📖 上传我家菜谱" width="480px" append-to-body>
+      <div class="space-y-3">
+        <el-input v-model="rName" placeholder="菜名，如：奶奶的红烧蹄髈" maxlength="20" />
+        <div>
+          <p class="text-xs text-slate-500 mb-1">食材（一行一个）</p>
+          <el-input v-model="rIngredients" type="textarea" :rows="3" placeholder="猪蹄 500g&#10;黄豆 50g" />
+        </div>
+        <div>
+          <p class="text-xs text-slate-500 mb-1">做法步骤（一行一步，3-8 步更佳）</p>
+          <el-input v-model="rSteps" type="textarea" :rows="5" placeholder="冷水下锅焯水去腥&#10;转小火炖 1.5 小时" />
+        </div>
+        <el-input v-model="rNote" placeholder="一句话介绍（可选）：软烂入味，老人孩子都爱" maxlength="40" />
+        <p class="text-[11px] text-slate-400">保存后 AI 会按菜的角色（荤/素/汤/主食）把它安排进全家食谱，图片也会自动生成</p>
+      </div>
+      <template #footer>
+        <button class="btn-primary w-full" @click="saveRecipe">保存并参与推荐</button>
+      </template>
+    </el-dialog>
   </div>
 </template>

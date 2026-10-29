@@ -18,6 +18,33 @@ const thumbOk = ref(true)
 const thumbLoaded = ref(false)
 const heroOk = ref(true)
 const heroLoaded = ref(false)
+/** 重新生成计数（换一张后 URL 加版本号防浏览器缓存） */
+const imgVer = ref(0)
+const regenerating = ref(false)
+
+const imgUrl = computed(
+  () => `/api/dish-image?name=${encodeURIComponent(props.dish.name)}${imgVer.value ? `&v=${imgVer.value}` : ''}`
+)
+
+/** 图片与菜对不上时：调 regen=1 让服务端删缓存重生成，成功后刷新展示 */
+function regenImage() {
+  if (regenerating.value) return
+  regenerating.value = true
+  thumbOk.value = true
+  thumbLoaded.value = false
+  const probe = new Image()
+  probe.onload = () => {
+    regenerating.value = false
+    imgVer.value++
+    thumbLoaded.value = true
+    ElMessage.success(`已重新生成「${props.dish.name}」的图片`)
+  }
+  probe.onerror = () => {
+    regenerating.value = false
+    ElMessage.warning('重新生成失败，稍后再试')
+  }
+  probe.src = `/api/dish-image?name=${encodeURIComponent(props.dish.name)}&regen=1&t=${Date.now()}`
+}
 
 const flavorColors: Record<string, string> = {
   辣: 'bg-red-50 text-red-500',
@@ -47,7 +74,7 @@ function eat() {
 
 <template>
   <div
-    class="card !rounded-lg !p-4 flex flex-col gap-2.5 cursor-pointer hover:shadow-card-hover transition-shadow"
+    class="card !rounded-lg !p-4 flex flex-col gap-2.5 cursor-pointer hover:shadow-card-hover transition-shadow group"
     @click="showDetail = true"
   >
     <div class="flex items-start justify-between gap-2">
@@ -60,7 +87,7 @@ function eat() {
         <div v-if="thumbOk && !thumbLoaded" class="absolute inset-0 animate-pulse bg-slate-200" />
         <img
           v-if="thumbOk"
-          :src="`/api/dish-image?name=${encodeURIComponent(dish.name)}`"
+          :src="imgUrl"
           :alt="dish.name"
           class="w-full h-full object-cover transition-opacity duration-500"
           :class="thumbLoaded ? 'opacity-100' : 'opacity-0'"
@@ -70,6 +97,14 @@ function eat() {
           @error="thumbOk = false"
         >
         <div v-if="!thumbOk" class="w-full h-full flex items-center justify-center text-2xl">🍽️</div>
+        <!-- 换一张：图片与菜对不上时重新生成 -->
+        <button
+          v-if="thumbOk"
+          class="absolute bottom-0.5 right-0.5 w-5 h-5 rounded bg-black/45 text-white text-[10px] leading-none flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-black/70 transition-opacity"
+          :class="regenerating ? 'animate-spin opacity-100' : ''"
+          title="图片不对？重新生成"
+          @click.stop="regenImage"
+        >⟳</button>
       </div>
     </div>
 
@@ -110,7 +145,7 @@ function eat() {
           <div v-if="heroOk && !heroLoaded" class="absolute inset-0 animate-pulse bg-slate-200" />
           <img
             v-if="heroOk"
-            :src="`/api/dish-image?name=${encodeURIComponent(dish.name)}`"
+            :src="imgUrl"
             :alt="dish.name"
             class="w-full h-full object-cover transition-opacity duration-500"
             :class="heroLoaded ? 'opacity-100' : 'opacity-0'"
@@ -126,6 +161,8 @@ function eat() {
         </div>
 
         <div class="flex items-center gap-2 flex-wrap">
+          <span v-if="dish.source === 'web'" class="chip bg-sky-50 text-sky-600">🌐 AI 联网推荐</span>
+          <span v-else-if="dish.source === 'user'" class="chip bg-orange-50 text-orange-600">🏠 我家菜谱</span>
           <span class="chip bg-primary-50 text-primary-700">{{ dish.region }}</span>
           <span
             v-for="f in dish.flavors"

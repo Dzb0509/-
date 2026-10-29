@@ -51,6 +51,14 @@ function cosine(a: number[], b: number[]): number {
   return dot / (Math.sqrt(na) * Math.sqrt(nb) + 1e-9)
 }
 
+/** 给 embedding 调用加超时，避免上游慢请求拖住对话/推荐主链路 */
+function embedWithTimeout(texts: string[], ms: number): Promise<number[][]> {
+  return Promise.race([
+    embed(texts),
+    new Promise<never>((_, rej) => setTimeout(() => rej(new Error(`embedding 超时 ${ms}ms`)), ms))
+  ])
+}
+
 function buildCorpus(): string[] {
   const foodTexts = FOOD_DB.map(
     (f) =>
@@ -68,7 +76,7 @@ async function build() {
     return
   }
   try {
-    const vectors = await embed(corpus)
+    const vectors = await embedWithTimeout(corpus, 15000)
     passages = corpus.map((text, i) => ({ text, vector: vectors[i] }))
   } catch (e: any) {
     // Key 无效/配额不足等：降级为关键词模式，不让知识库阻塞服务
@@ -98,7 +106,7 @@ export async function retrieve(query: string, k = 4): Promise<string[]> {
 
   let qv: number[]
   try {
-    ;[qv] = await embed([query])
+    ;[qv] = await embedWithTimeout([query], 3000)
   } catch (e: any) {
     // 查询向量化失败：降级关键词
     console.error('[rag] 查询向量化失败，降级关键词：', e?.message)

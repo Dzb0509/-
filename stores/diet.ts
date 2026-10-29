@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import type { FoodItem, FoodRecord, UserProfile } from '~/types/diet'
-import type { Dish, FamilyMember, PopulationId } from '~/types/recommend'
+import type { Dish, FamilyMember, PopulationId, UserRecipe } from '~/types/recommend'
 import { sumNutrition, guessMeal } from '~/types/diet'
 import { learnTaste, emptyTaste, type TasteProfile } from '~/types/taste'
 
@@ -40,7 +40,9 @@ export const useDietStore = defineStore('diet', {
         { id: 'm4', label: '奶奶', age: 68, population: 'elderly' }
       ]) as FamilyMember[],
       /** 待确认的识餐结果（上传后 → 结果页确认） */
-      pending: null as { image: string; foods: FoodItem[] } | null
+      pending: null as { image: string; foods: FoodItem[] } | null,
+      /** 用户上传的家传菜谱（参与全家推荐） */
+      userRecipes: (persisted?.userRecipes ?? []) as UserRecipe[]
     }
   },
 
@@ -129,6 +131,14 @@ export const useDietStore = defineStore('diet', {
       if (m) Object.assign(m, patch)
       this.persist()
     },
+    addUserRecipe(r: Omit<UserRecipe, 'id'>) {
+      this.userRecipes.push({ ...r, id: `ur-${Date.now()}` })
+      this.persist()
+    },
+    removeUserRecipe(id: string) {
+      this.userRecipes = this.userRecipes.filter((r) => r.id !== id)
+      this.persist()
+    },
     /** 把一道推荐菜按单人份写入今日餐盘（蛋白质等按菜品整份营养计算） */
     addDish(dish: Dish, meal: FoodRecord['meal'] = guessMeal()) {
       const item: FoodItem = {
@@ -153,7 +163,7 @@ export const useDietStore = defineStore('diet', {
       // 骨架阶段使用 localStorage；正式版计划升级为 IndexedDB（接口保持一致）
       localStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify({ records: this.records, profile: this.profile, family: this.family })
+        JSON.stringify({ records: this.records, profile: this.profile, family: this.family, userRecipes: this.userRecipes })
       )
     }
   }

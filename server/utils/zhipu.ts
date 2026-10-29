@@ -45,19 +45,34 @@ export interface LLMMessage {
   tool_call_id?: string
 }
 
-/** 非流式对话（文本模型，支持 Function Calling） */
+/** 非流式对话（文本模型，支持 Function Calling；限流/网关错误自动重试 1 次） */
 export async function llmChat(messages: LLMMessage[], tools?: any[]) {
   const { base, key, model } = textConfig()
-  return $fetch<any>(`${base}/chat/completions`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${key}` },
-    body: {
-      model,
-      messages,
-      temperature: 0.6,
-      ...(tools?.length ? { tools, tool_choice: 'auto' } : {})
+  const call = () =>
+    $fetch<any>(`${base}/chat/completions`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${key}` },
+      body: {
+        model,
+        messages,
+        temperature: 0.6,
+        ...(tools?.length ? { tools, tool_choice: 'auto' } : {})
+      },
+      onResponseError({ response }) {
+        console.error(`[llm] ${model} 上游错误 ${response.status}:`, JSON.stringify(response._data)?.slice(0, 600))
+      }
+    })
+  try {
+    return await call()
+  } catch (e: any) {
+    const status = e?.status ?? e?.statusCode ?? e?.response?.status
+    if ([408, 429, 500, 502, 503, 504].includes(Number(status))) {
+      console.warn(`[llm] ${model} 上游 ${status}，1.2s 后重试一次...`)
+      await new Promise((r) => setTimeout(r, 1200))
+      return call()
     }
-  })
+    throw e
+  }
 }
 
 /** 流式对话（返回原始 Response，配合 pipeOpenAIStream 消费） */

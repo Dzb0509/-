@@ -1,8 +1,10 @@
 import { defineEventHandler, readBody } from 'h3'
+import { createHash } from 'node:crypto'
 import { DISHES, filterDishes, BREAKFAST_IDS, SNACK_IDS } from '../utils/dishes'
 import { hasTextKey, llmChat } from '../utils/zhipu'
 import { retrieve } from '../utils/rag'
-import type { Dish, FamilyMember, PopulationId, RecommendResult, DishRole } from '~/types/recommend'
+import { webSearch, webHitsToPrompt } from '../utils/websearch'
+import type { Dish, FamilyMember, PopulationId, RecommendResult, DishRole, UserRecipe } from '~/types/recommend'
 import { POP_MAP, FAMILY_SET, dishRole } from '~/types/recommend'
 import type { TasteProfile } from '~/types/taste'
 import { topEntries } from '~/types/taste'
@@ -20,6 +22,8 @@ interface Body {
   taste?: TasteProfile
   /** AI 自定义偏好（口味/需求/忌口） */
   custom?: { flavors?: string[]; needs?: string; taboos?: string }
+  /** 用户上传的家传菜谱（参与全家推荐，优先入选） */
+  customRecipes?: UserRecipe[]
   seed?: number
 }
 
@@ -32,8 +36,26 @@ function tabooHit(d: Dish, taboos?: string): boolean {
     .some((t) => d.name.includes(t) || d.ingredients.some((i) => i.includes(t)))
 }
 
+/** 用户菜谱 → Dish（营养按家常菜估算，角色由 dishRole 判定，图片走 dish-image 按名生成） */
+function userRecipeToDish(r: UserRecipe): Dish | null {
+  const name = String(r.name ?? '').trim().slice(0, 20)
+  if (!name) return null
+  return {
+    id: `u-${r.id || createHash('md5').update(name).digest('hex').slice(0, 8)}`,
+    name,
+    region: '我家菜谱',
+    flavors: [],
+    pops: ['balance', 'child', 'elderly', 'pregnant', 'lactation', 'hypertension', 'diabetes', 'hyperlipid'],
+    nutrition: { kcal: 320, protein: 14, fat: 12, carb: 30 },
+    ingredients: (r.ingredients ?? []).slice(0, 12),
+    steps: (r.steps ?? []).slice(0, 12),
+    highlight: r.note?.slice(0, 40) || '来自我家的私房菜谱',
+    source: 'user'
+  }
+}
+
 /** 家庭模式候选：一道菜须覆盖全部成员人群；覆盖不足半数成员的菜剔除；并保证主食/汤羹在池中可用 */
-function familyCandidates(meal: MealKey, members: FamilyMember[]): Dish[] {
+function familyCandidates(meal: MealKey, members: FamilyMember[], extra: Dish[] = []): Dish[] {
   const pops = [...new Set(members.map((m) => m.population))]
   const wide = DISHES.filter((d) =>
     meal === 'breakfast' ? BREAKFAST_IDS.includes(d.id) : !BREAKFAST_IDS.includes(d.id) && !SNACK_IDS.includes(d.id)
@@ -62,17 +84,20 @@ function familyCandidates(meal: MealKey, members: FamilyMember[]): Dish[] {
       }
     }
   }
+  // 用户上传的家传菜谱直接进入候选池（角色由 dishRole 判定，rulePick 中优先入选）
+  for (const d of extra) if (!out.some((x) => x.id === d.id)) out.unshift(d)
   return out
 }
 
 /** 规则引擎：按口味/地域画像与昨日重复度打分；传 role 时只选该角色（荤/素/汤/主食）的菜 */
-function rulePick(meal: MealKey, body: Body, exclude: Set<string>, role?: DishRole): Dish[] {
-  const pool = (body.members?.length ? familyCandidates(meal, body.members) : filterDishes(body.population ?? 'balance', meal))
+function rulePick(meal: MealKey, body: Body, exclude: Set<string>, role?: DishRole, extra: Dish[] = []): Dish[] {
+  const pool = (body.members?.length ? familyCandidates(meal, body.members, extra) : filterDishes(body.population ?? 'balance', meal))
     .filter((d) => !exclude.has(d.id) && !tabooHit(d, body.custom?.taboos))
   const target = role ? pool.filter((d) => dishRole(d) === role) : pool
   const finalPool = target.length ? target : pool // 该角色凑不出时退回全池
   const scored = finalPool.map((d) => {
     let s = Math.random() * 0.8 // 轻微随机，保证「换一换」有变化
+    if (d.source === 'user') s += 3 // 用户家传菜谱优先入选
     const flavors = body.taste?.flavors ?? {}
     for (const f of d.flavors) s += (flavors[f as keyof typeof flavors] ?? 0) * 1.5
     // AI 自定义口味偏好加权
@@ -88,18 +113,18 @@ function rulePick(meal: MealKey, body: Body, exclude: Set<string>, role?: DishRo
 }
 
 /** 家庭模式「一整份」：按角色组合逐位选菜（早 3 道 / 午晚各 4 道），角色凑不齐时用普通选择补足 */
-function familyRuleSet(meal: MealKey, body: Body, exclude: Set<string>): Dish[] {
+function familyRuleSet(meal: MealKey, body: Body, exclude: Set<string>, extra: Dish[] = []): Dish[] {
   const used = new Set(exclude)
   const out: Dish[] = []
   for (const role of FAMILY_SET[meal]) {
-    const pick = rulePick(meal, body, used, role)
+    const pick = rulePick(meal, body, used, role, extra)
     if (pick.length) {
       out.push(pick[0])
       used.add(pick[0].id)
     }
   }
   while (out.length < FAMILY_SET[meal].length) {
-    const pick = rulePick(meal, body, used)
+    const pick = rulePick(meal, body, used, undefined, extra)
     if (!pick.length) break
     out.push(pick[0])
     used.add(pick[0].id)
@@ -107,21 +132,22 @@ function familyRuleSet(meal: MealKey, body: Body, exclude: Set<string>): Dish[] 
   return out
 }
 
-/** 家庭模式单餐 GLM 候选：按角色配额采样，确保每个角色都有足量可选菜 */
-function buildFamilyCandidates(meal: MealKey, body: Body, roles: DishRole[]) {
-  const alive = familyCandidates(meal, body.members!).filter(
+/** 家庭模式单餐 GLM 候选：按角色配额采样，确保每个角色都有足量可选菜（家传菜谱必进候选） */
+function buildFamilyCandidates(meal: MealKey, body: Body, roles: DishRole[], extra: Dish[] = []) {
+  const alive = familyCandidates(meal, body.members!, extra).filter(
     (d) => !body.yesterday?.some((y) => y.includes(d.name))
   )
   const byRole = roles.flatMap((r) => alive.filter((d) => dishRole(d) === r).slice(0, 6))
-  const candPool = [...new Map([...byRole, ...alive.slice(0, 10)].map((d) => [d.id, d])).values()]
+  const candPool = [...new Map([...extra, ...byRole, ...alive.slice(0, 10)].map((d) => [d.id, d])).values()]
   return candPool.map((d) => ({
     id: d.id, name: d.name, region: d.region, flavors: d.flavors,
-    kcal: d.nutrition.kcal, highlight: d.highlight, role: dishRole(d)
+    kcal: d.nutrition.kcal, highlight: d.highlight, role: dishRole(d),
+    source: d.source ?? 'local'
   }))
 }
 
-/** 把 GLM 返回的菜按「一整份」角色顺序重排：GLM 按角色入座 → 缺的角色用规则引擎补位 → 仍不足时任意补齐（同角色不堆叠） */
-function composeFamilySet(meal: MealKey, glmDishes: Dish[], fallback: Dish[], used: Set<string>): Dish[] {
+/** 把 GLM 返回的菜按「一整份」角色顺序重排：家传菜谱保底入座 → GLM 按角色入座 → 缺的角色用规则引擎补位 → 仍不足时任意补齐（同角色不堆叠） */
+function composeFamilySet(meal: MealKey, glmDishes: Dish[], fallback: Dish[], used: Set<string>, userDishes: Dish[] = []): Dish[] {
   const out: Dish[] = []
   const localUsed = new Set(used)
   const filled = new Set<DishRole>()
@@ -137,8 +163,12 @@ function composeFamilySet(meal: MealKey, glmDishes: Dish[], fallback: Dish[], us
     used.add(d.id)
     return true
   }
+  // 0) 用户家传菜谱保底入座（每餐最多 1 道，角色不冲突即可）
+  const u = userDishes.find((d) => !localUsed.has(d.id) && FAMILY_SET[meal].includes(dishRole(d)))
+  if (u) tryAdd(u, dishRole(u))
   // 1) GLM 结果按角色入座
   for (const role of FAMILY_SET[meal]) {
+    if (filled.has(role)) continue
     const g = glmDishes.find((d) => !localUsed.has(d.id) && dishRole(d) === role)
     if (g) tryAdd(g, role)
   }
@@ -182,10 +212,15 @@ export default defineEventHandler(async (handler): Promise<RecommendResult> => {
   // ---- 真实链路：规则引擎出候选 → GLM-4 择优 + 生成推荐理由 ----
   if (hasTextKey()) {
     try {
+      // 用户上传的家传菜谱 → Dish（忌口过滤后参与推荐，rulePick 中优先入选）
+      const userDishes: Dish[] = (body.customRecipes ?? [])
+        .map(userRecipeToDish)
+        .filter((d): d is Dish => !!d && !tabooHit(d, body.custom?.taboos))
+
       const ruleResult: RecommendResult = { source: 'glm', reason: '', meals: {} }
       const usedIds = new Set<string>()
       for (const meal of meals) {
-        const picks = isFamily ? familyRuleSet(meal, body, exclude) : rulePick(meal, body, exclude)
+        const picks = isFamily ? familyRuleSet(meal, body, exclude, userDishes) : rulePick(meal, body, exclude)
         picks.forEach((p) => exclude.add(p.id))
         ruleResult.meals[meal] = picks
       }
@@ -196,21 +231,30 @@ export default defineEventHandler(async (handler): Promise<RecommendResult> => {
       ).catch(() => [] as string[])
 
       const baseSys = `你是营养师。${isFamily ? '这是家庭模式：一桌菜要尽量同时满足所有成员的营养需求（例如有孕妇就保证叶酸与优质蛋白、有老人就软烂低盐、有孩子就营养密度高且不太辣），并兼顾大人的口味。' : '根据用户画像挑选合适的菜。'}`
+      const MEAL_LABEL: Record<MealKey, string> = { breakfast: '早餐', lunch: '午餐', dinner: '晚餐' }
 
       let glmReason = ''
-      /** 家庭模式：逐餐串行调用，每次明确携带「已定菜单」强制跨餐不重复 */
+      /** 家庭模式：逐餐串行调用，联网搜索贴合家庭构成的菜谱 + 强制跨餐不重复 */
       if (isFamily) {
         const pickedNames: string[] = []
         const reasons: string[] = []
         const out: RecommendResult = { source: 'glm', reason: '', meals: {} }
         for (const meal of meals) {
           const roleName = meal === 'breakfast' ? '主食+蛋白质+蔬果各一道' : '一荤、一素、一汤、一主食'
-          const candidates = buildFamilyCandidates(meal, body, FAMILY_SET[meal])
-          const sys = `${baseSys}为本餐组成一整份餐桌套餐：${roleName}。候选菜中的 role 字段标注了每道菜的角色（meat荤/veg素/soup汤/staple主食），请严格按角色各挑一道。菜品不得与「已定菜单」重复。并用不超过 40 字说明本餐这样搭配照顾了哪些成员。
-严格输出 JSON：{"reason":"...","ids":["id1","id2",...]}（恰好 ${FAMILY_SET[meal].length} 个 id，必须来自候选列表）`
+          const candidates = buildFamilyCandidates(meal, body, FAMILY_SET[meal], userDishes)
+          // 联网搜索贴合本家庭构成的菜谱灵感（失败静默跳过）
+          const webHits = await webSearch(
+            `适合${userLabel}的${MEAL_LABEL[meal]}家常菜谱 ${roleName} 营养搭配做法`,
+            5
+          )
+          const webBlock = webHits.length
+            ? `\n【联网搜索参考】（如其中确有比候选更贴合本家庭需求的菜谱，可改写为一道完整菜谱放入 webDishes；否则留空数组）\n${webHitsToPrompt(webHits)}`
+            : ''
+          const sys = `${baseSys}为本餐组成一整份餐桌套餐：${roleName}。候选菜中的 role 字段标注了每道菜的角色（meat荤/veg素/soup汤/staple主食），请严格按角色各挑一道；source 为 user 的是用户家传菜谱，请优先采用。菜品不得与「已定菜单」重复。并用不超过 40 字说明本餐这样搭配照顾了哪些成员。
+严格输出 JSON：{"reason":"...","ids":["id1","id2"],"webDishes":[{"name":"菜名","region":"菜系","flavors":["口味"],"kcal":300,"protein":15,"fat":10,"carb":30,"ingredients":["食材1","食材2"],"steps":["步骤1","步骤2"],"highlight":"一句话适合理由"}]}（ids 恰好 ${FAMILY_SET[meal].length} 个且必须来自候选列表；webDishes 通常为空数组，最多 1 道，steps 需 3-6 步可操作）`
           const user = `家庭构成：${userLabel}${tasteText.length ? `，口味偏好：${tasteText.join('、')}` : '（暂无口味数据）'}
 已定菜单（绝对不能重复）：${pickedNames.join('、') || '无'}
-膳食指南参考：${guide.join('；') || '主食粗细搭配，每餐有蛋白质与蔬菜'}
+膳食指南参考：${guide.join('；') || '主食粗细搭配，每餐有蛋白质与蔬菜'}${webBlock}
 本餐候选菜：${JSON.stringify(candidates)}`
           const res = await llmChat([
             { role: 'system', content: sys },
@@ -219,14 +263,34 @@ export default defineEventHandler(async (handler): Promise<RecommendResult> => {
           const text: string = res.choices?.[0]?.message?.content ?? ''
           const m = text.match(/\{[\s\S]*\}/)
           let glmDishes: Dish[] = []
+          let webDishes: Dish[] = []
           if (m) {
             const parsed = JSON.parse(m[0])
             const ids: string[] = Array.isArray(parsed.ids) ? parsed.ids : []
             glmDishes = ids.map((id) => DISHES.find((d) => d.id === id)).filter(Boolean) as Dish[]
+            if (Array.isArray(parsed.webDishes)) {
+              webDishes = parsed.webDishes.slice(0, 1).map((w: any) => ({
+                id: `web-${createHash('md5').update(String(w?.name ?? '')).digest('hex').slice(0, 8)}`,
+                name: String(w?.name ?? '').slice(0, 20),
+                region: String(w?.region ?? '联网新菜谱').slice(0, 10) || '联网新菜谱',
+                flavors: Array.isArray(w?.flavors) ? w.flavors.slice(0, 3).map(String) : [],
+                pops: [],
+                nutrition: {
+                  kcal: Number(w?.kcal) || 300,
+                  protein: Number(w?.protein) || 15,
+                  fat: Number(w?.fat) || 10,
+                  carb: Number(w?.carb) || 30
+                },
+                ingredients: Array.isArray(w?.ingredients) ? w.ingredients.slice(0, 12).map(String) : [],
+                steps: Array.isArray(w?.steps) ? w.steps.slice(0, 12).map(String) : [],
+                highlight: String(w?.highlight ?? 'AI 联网搜索并改写的菜谱').slice(0, 60),
+                source: 'web' as const
+              })).filter((d) => d.name && d.steps.length && !tabooHit(d, body.custom?.taboos))
+            }
             const r = String(parsed.reason ?? '').trim()
             if (r) reasons.push(r.slice(0, 60))
           }
-          const set = composeFamilySet(meal, glmDishes, ruleResult.meals[meal] ?? [], usedIds)
+          const set = composeFamilySet(meal, [...glmDishes, ...webDishes], ruleResult.meals[meal] ?? [], usedIds, userDishes)
           out.meals[meal] = set
           set.forEach((d) => pickedNames.push(d.name))
         }

@@ -112,6 +112,20 @@ export interface Dish {
   steps: string[]
   /** 一句话亮点（AI/规则引擎生成理由时也复用） */
   highlight: string
+  /** 菜谱来源：缺省=本地菜库；web=AI 联网搜索；user=用户上传的家传菜谱 */
+  source?: 'web' | 'user'
+}
+
+/** 用户上传的自家菜谱（参与全家推荐，localStorage 持久化） */
+export interface UserRecipe {
+  id: string
+  name: string
+  /** 食材清单（一行一个） */
+  ingredients: string[]
+  /** 做法步骤（一行一步） */
+  steps: string[]
+  /** 一句话介绍/口味特点（可空） */
+  note?: string
 }
 
 /** 推荐结果：按餐次分组 */
