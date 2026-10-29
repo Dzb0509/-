@@ -88,21 +88,34 @@ async function worker(id) {
   while (cursor < queue.length) {
     const name = queue[cursor++]
     let ok = false
-    for (let a = 1; a <= 3 && !ok; a++) {
-      ok = await regen(name)
-      if (!ok) await sleep(15000 * a)
+    try {
+      for (let a = 1; a <= 3 && !ok; a++) {
+        ok = await regen(name)
+        if (!ok) await sleep(15000 * a)
+      }
+    } catch (e) {
+      console.error(`✗ [w${id}] ${name} 请求异常: ${e.message}`)
     }
     if (ok) {
       done.add(name)
       console.log(`✓ [w${id}] ${name}（${done.size}/${names.length}）`)
     } else {
       regenFail.push(name)
-      console.error(`✗ [w${id}] ${name} 重生成失败（3 次尝试）`)
+      consecutiveFails++
+      console.error(`✗ [w${id}] ${name} 重生成失败`)
+      // 连续多张失败 = 系统性问题（余额不足/服务异常），立即中止避免空烧
+      if (consecutiveFails >= 5) {
+        console.error(`连续 ${consecutiveFails} 张失败，疑似余额不足或服务异常，中止脚本（进度已保存，处理后重跑即断点续跑）`)
+        saveDone()
+        process.exit(1)
+      }
     }
+    if (ok) consecutiveFails = 0
     if (done.size % 10 === 0) saveDone()
     await sleep(1000)
   }
 }
+let consecutiveFails = 0
 await Promise.all([worker(1), worker(2)])
 saveDone()
 console.log(`阶段 1 完成：成功 ${done.size}，失败 ${regenFail.length}`)

@@ -81,6 +81,15 @@ async function generate(name: string, slug: string): Promise<Buffer | null> {
         signal: AbortSignal.timeout(60000)
       })
       if (res.status === 429) {
+        // 区分「余额不足」（code 1113，重试无意义）与普通限流
+        let code = ''
+        try {
+          code = String(((await res.json()) as any)?.error?.code ?? '')
+        } catch { /* 忽略解析失败 */ }
+        if (code === '1113') {
+          console.error('[dish-image] 智谱账户余额不足（code 1113），请到 open.bigmodel.cn 充值后重试')
+          return null
+        }
         console.warn(`[dish-image] ${name} 限流，第 ${attempt} 次退避重试...`)
         await sleep(20000 * attempt + Math.random() * 5000)
         continue
