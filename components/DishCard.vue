@@ -65,6 +65,7 @@ const videoLinks = computed(() => [
 ])
 
 function eat() {
+  if (eaten.value) return // 防连点重复记录
   eaten.value = true
   emit('eat', props.dish)
   diet.addDish(props.dish, props.meal)

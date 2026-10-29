@@ -30,7 +30,10 @@ const activeGroup = ref(
 )
 const showCustom = ref(false)
 
+/** 请求序号：快速连点时只让最新一次请求的结果生效（防旧响应覆盖新响应） */
+let reqSeq = 0
 async function fetchPlan(meals?: ('breakfast' | 'lunch' | 'dinner')[]) {
+  const seq = ++reqSeq
   if (meals?.length) refreshing.value = [...meals]
   else loading.value = true
   try {
@@ -47,6 +50,7 @@ async function fetchPlan(meals?: ('breakfast' | 'lunch' | 'dinner')[]) {
           : undefined
       }
     })
+    if (seq !== reqSeq) return // 已有更新的请求，丢弃本次过期结果
     if (meals?.length && plan.value) {
       for (const m of meals) plan.value.meals[m] = res.meals[m]
       plan.value.source = res.source
@@ -54,26 +58,37 @@ async function fetchPlan(meals?: ('breakfast' | 'lunch' | 'dinner')[]) {
       plan.value = res
     }
   } catch {
-    ElMessage.error('推荐生成失败，请稍后重试')
+    if (seq === reqSeq) ElMessage.error('推荐生成失败，请稍后重试')
   } finally {
-    loading.value = false
-    refreshing.value = []
+    if (seq === reqSeq) {
+      loading.value = false
+      refreshing.value = []
+    }
   }
 }
 
+/** 整页刷新防抖：快速连点人群/今日明日只发最后一次请求（GLM 调用有成本） */
+let fullTimer: ReturnType<typeof setTimeout> | null = null
+function queueFullRefresh() {
+  if (fullTimer) clearTimeout(fullTimer)
+  fullTimer = setTimeout(() => fetchPlan(), 400)
+}
+
 function switchDay(mode: 'today' | 'tomorrow') {
+  if (dayMode.value === mode) return
   dayMode.value = mode
-  fetchPlan()
+  queueFullRefresh()
 }
 
 function switchPop(pop: PopulationId) {
+  if (diet.profile.population === pop) return
   diet.updateProfile({ population: pop })
-  fetchPlan()
+  queueFullRefresh()
 }
 
 function saveCustom(pref: CustomPref) {
   diet.updateProfile({ custom: pref })
-  fetchPlan()
+  queueFullRefresh()
 }
 
 const reasonLine = computed(() => plan.value?.reason ?? '')

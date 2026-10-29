@@ -93,11 +93,15 @@ function removeMember(id: string) {
   plan.value = null
 }
 
+/** 请求序号：快速连点时只让最新一次请求的结果生效 */
+let reqSeq = 0
 async function fetchPlan(meals?: ('breakfast' | 'lunch' | 'dinner')[]) {
   if (!diet.family.length) {
     ElMessage.warning('先添加至少一位家庭成员')
     return
   }
+  if (loading.value && !meals?.length) return // 整桌生成中不允许重复触发
+  const seq = ++reqSeq
   if (meals?.length) refreshing.value = [...meals]
   else loading.value = true
   try {
@@ -112,6 +116,7 @@ async function fetchPlan(meals?: ('breakfast' | 'lunch' | 'dinner')[]) {
         customRecipes: diet.userRecipes
       }
     })
+    if (seq !== reqSeq) return // 已有更新的请求，丢弃本次过期结果
     if (meals?.length && plan.value) {
       for (const m of meals) plan.value.meals[m] = res.meals[m]
       plan.value.source = res.source
@@ -119,10 +124,12 @@ async function fetchPlan(meals?: ('breakfast' | 'lunch' | 'dinner')[]) {
       plan.value = res
     }
   } catch {
-    ElMessage.error('生成失败，请稍后重试')
+    if (seq === reqSeq) ElMessage.error('生成失败，请稍后重试')
   } finally {
-    loading.value = false
-    refreshing.value = []
+    if (seq === reqSeq) {
+      loading.value = false
+      refreshing.value = []
+    }
   }
 }
 
