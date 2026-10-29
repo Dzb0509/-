@@ -1,18 +1,14 @@
 import { defineEventHandler, readBody } from 'h3'
-import { DISHES, filterDishes } from '../utils/dishes'
+import { DISHES, filterDishes, BREAKFAST_IDS, SNACK_IDS } from '../utils/dishes'
 import { hasTextKey, llmChat } from '../utils/zhipu'
 import { retrieve } from '../utils/rag'
 import type { Dish, FamilyMember, PopulationId, RecommendResult } from '~/types/recommend'
+import { POP_MAP } from '~/types/recommend'
 import type { TasteProfile } from '~/types/taste'
 import { topEntries } from '~/types/taste'
 
 type MealKey = 'breakfast' | 'lunch' | 'dinner'
 const MEAL_KEYS: MealKey[] = ['breakfast', 'lunch', 'dinner']
-
-const POP_LABELS: Record<string, string> = {
-  balance: '均衡饮食', lose: '减脂控卡', muscle: '增肌塑形', sugar: '控糖稳糖',
-  child: '儿童青少年', pregnant: '孕产期', elderly: '老年人'
-}
 
 interface Body {
   population?: PopulationId
@@ -22,16 +18,26 @@ interface Body {
   day?: 'today' | 'tomorrow'
   yesterday?: string[]
   taste?: TasteProfile
+  /** AI 自定义偏好（口味/需求/忌口） */
+  custom?: { flavors?: string[]; needs?: string; taboos?: string }
   seed?: number
+}
+
+/** 忌口过滤：菜名或食材命中忌口关键词则剔除 */
+function tabooHit(d: Dish, taboos?: string): boolean {
+  if (!taboos) return false
+  return taboos
+    .split(/[，,、;；\s]+/)
+    .filter((t) => t.length >= 2)
+    .some((t) => d.name.includes(t) || d.ingredients.some((i) => i.includes(t)))
 }
 
 /** 家庭模式候选：一道菜须覆盖全部成员人群；覆盖不足半数成员的菜剔除 */
 function familyCandidates(meal: MealKey, members: FamilyMember[]): Dish[] {
   const pops = [...new Set(members.map((m) => m.population))]
-  const pool = DISHES.filter((d) => {
-    if (meal === 'breakfast') return !['d101','d102','d103','d104','d201','d202','d203','d204','d301','d302','d401','d402','d501','d502','d503','d601','d602','d701','d702','d801','d802','d901','d902'].includes(d.id)
-    return !['d001', 'd002', 'd003', 'd004', 'd005', 'd1101', 'd1102'].includes(d.id)
-  })
+  const pool = DISHES.filter((d) =>
+    meal === 'breakfast' ? BREAKFAST_IDS.includes(d.id) : !BREAKFAST_IDS.includes(d.id) && !SNACK_IDS.includes(d.id)
+  )
   const full = pool.filter((d) => pops.every((p) => d.pops.includes(p as never)))
   if (full.length >= 6) return full
   const majority = pool.filter((d) => {
@@ -44,11 +50,13 @@ function familyCandidates(meal: MealKey, members: FamilyMember[]): Dish[] {
 /** 规则引擎：按口味/地域画像与昨日重复度打分 */
 function rulePick(meal: MealKey, body: Body, exclude: Set<string>): Dish[] {
   const pool = (body.members?.length ? familyCandidates(meal, body.members) : filterDishes(body.population ?? 'balance', meal))
-    .filter((d) => !exclude.has(d.id))
+    .filter((d) => !exclude.has(d.id) && !tabooHit(d, body.custom?.taboos))
   const scored = pool.map((d) => {
     let s = Math.random() * 0.8 // 轻微随机，保证「换一换」有变化
     const flavors = body.taste?.flavors ?? {}
     for (const f of d.flavors) s += (flavors[f as keyof typeof flavors] ?? 0) * 1.5
+    // AI 自定义口味偏好加权
+    for (const f of body.custom?.flavors ?? []) if (d.flavors.includes(f)) s += 1.2
     const regions = body.taste?.regions ?? {}
     s += (regions[d.region] ?? 0) * 1.2
     // 昨天吃过的菜名降权
@@ -66,9 +74,17 @@ export default defineEventHandler(async (handler): Promise<RecommendResult> => {
   const exclude = new Set<string>()
   const isFamily = !!body.members?.length
 
+  const memberText = (m: FamilyMember) => {
+    const p = POP_MAP[m.population]
+    const c = m.custom
+    const custom = c
+      ? `，个人需求：${[c.needs, c.taboos ? `忌口${c.taboos}` : '', c.flavors?.length ? `偏好${c.flavors.join('/')}` : ''].filter(Boolean).join('、')}`
+      : ''
+    return `${m.label || '成员'}（${m.age}岁，${p?.label ?? m.population}${custom}）`
+  }
   const userLabel = isFamily
-    ? `一个 ${body.members!.length} 口之家：${body.members!.map((m) => `${m.label || '成员'}（${m.age}岁，${POP_LABELS[m.population] ?? m.population}）`).join('、')}`
-    : `${POP_LABELS[pop] ?? pop}人群`
+    ? `一个 ${body.members!.length} 口之家：${body.members!.map(memberText).join('、')}`
+    : `${POP_MAP[pop]?.label ?? pop}人群${body.custom?.needs ? `（需求：${body.custom.needs}）` : ''}${body.custom?.taboos ? `，忌口：${body.custom.taboos}` : ''}`
   const tasteText = [
     topEntries(body.taste?.flavors as unknown as Record<string, number> ?? {}, 3).join('、'),
     topEntries(body.taste?.regions ?? {}, 2).join('、')
@@ -138,12 +154,12 @@ export default defineEventHandler(async (handler): Promise<RecommendResult> => {
   const fav = topEntries(body.taste?.flavors as unknown as Record<string, number> ?? {}, 2).join('、')
   const dayText = body.day === 'tomorrow' ? '明日' : '今日'
   if (isFamily) {
-    const labels = [...new Set(body.members!.map((m) => POP_LABELS[m.population] ?? m.population))].join('/')
+    const labels = [...new Set(body.members!.map((m) => POP_MAP[m.population]?.label ?? m.population))].join('/')
     result.reason = `按全家成员需求（${labels}）取交集搭配：${fav ? `延续你们偏好的${fav}口味，` : ''}每道菜同时照顾到老人、孩子与特殊人群。`
   } else {
     result.reason = body.yesterday?.length
       ? `结合你昨天的饮食（${body.yesterday.slice(0, 3).join('、')}等）做营养缺口互补${fav ? `，并延续你对${fav}口味的偏好` : ''}。`
-      : `${dayText}按${POP_LABELS[pop] ?? pop}搭配（三餐能量比约 3:4:3）${fav ? `，贴合你偏好的${fav}口味` : ''}。`
+      : `${dayText}按${POP_MAP[pop]?.label ?? pop}搭配（三餐能量比约 3:4:3）${fav ? `，贴合你偏好的${fav}口味` : ''}。`
   }
   return result
 })

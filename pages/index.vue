@@ -1,13 +1,13 @@
 <script setup lang="ts">
 /**
  * 首页：每日餐食推荐（主打）
- * - 分人群（均衡/减脂/增肌/控糖）
+ * - Hero 图文轮播（JS 自动循环播放）
+ * - 两级人群：先选人群组（成年人/老年人/婴幼儿…）→ 再选细分需求（减脂/高血压…）
+ * - AI 自定义口味/需求/忌口
  * - 根据昨日饮食 + 口味画像个性化推荐今日/明日三餐
- * - 每道菜含做法、换一换、一键记录
- * - 右侧：今日概览、口味画像、拍照识餐（辅助）
  */
-import type { RecommendResult, Dish, PopulationId } from '~/types/recommend'
-import { POPULATIONS } from '~/types/recommend'
+import type { RecommendResult, Dish, PopulationId, CustomPref } from '~/types/recommend'
+import { POPULATIONS, POP_GROUPS, POP_MAP } from '~/types/recommend'
 import { MEAL_LABELS, type MealType } from '~/types/diet'
 import { topEntries } from '~/types/taste'
 
@@ -24,6 +24,12 @@ const plan = ref<RecommendResult | null>(null)
 const loading = ref(true)
 const refreshing = ref<('breakfast' | 'lunch' | 'dinner')[]>([])
 
+/** 两级人群：当前展开的人群组（默认定位到 profile 所属组） */
+const activeGroup = ref(
+  POP_GROUPS.find((g) => g.options.includes(diet.profile.population))?.id ?? 'adult'
+)
+const showCustom = ref(false)
+
 async function fetchPlan(meals?: ('breakfast' | 'lunch' | 'dinner')[]) {
   if (meals?.length) refreshing.value = [...meals]
   else loading.value = true
@@ -35,7 +41,10 @@ async function fetchPlan(meals?: ('breakfast' | 'lunch' | 'dinner')[]) {
         day: dayMode.value,
         meals: meals ?? ['breakfast', 'lunch', 'dinner'],
         yesterday: diet.yesterdayNames,
-        taste: diet.tasteProfile
+        taste: diet.tasteProfile,
+        custom: diet.profile.custom
+          ? { flavors: diet.profile.custom.flavors, needs: diet.profile.custom.needs, taboos: diet.profile.custom.taboos }
+          : undefined
       }
     })
     if (meals?.length && plan.value) {
@@ -62,6 +71,11 @@ function switchPop(pop: PopulationId) {
   fetchPlan()
 }
 
+function saveCustom(pref: CustomPref) {
+  diet.updateProfile({ custom: pref })
+  fetchPlan()
+}
+
 const reasonLine = computed(() => plan.value?.reason ?? '')
 
 const tasteTop = computed(() => ({
@@ -82,11 +96,16 @@ const greeting = computed(() => {
   return '晚上好'
 })
 
+const activePopInfo = computed(() => POP_MAP[diet.profile.population])
+
 onMounted(() => fetchPlan())
 </script>
 
 <template>
   <div class="space-y-6">
+    <!-- Hero 图文轮播 -->
+    <HeroCarousel />
+
     <!-- 头部：问候 + 今日/明日切换 -->
     <header class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
       <div>
@@ -115,20 +134,55 @@ onMounted(() => fetchPlan())
       </div>
     </header>
 
-    <!-- 人群选择 -->
-    <section class="grid grid-cols-2 lg:grid-cols-4 gap-3">
-      <button
-        v-for="p in POPULATIONS"
-        :key="p.id"
-        class="card !p-4 text-left transition-all border-2"
-        :class="diet.profile.population === p.id ? '!border-primary-400 ring-1 ring-primary-100' : '!border-transparent hover:!border-primary-100'"
-        @click="switchPop(p.id)"
-      >
-        <span class="text-xl">{{ p.emoji }}</span>
-        <p class="font-semibold text-sm mt-1">{{ p.label }}</p>
-        <p class="text-[11px] text-slate-400 mt-0.5">{{ p.desc }}</p>
-        <p class="text-[11px] text-primary-600 mt-1">{{ p.kcalHint }}</p>
-      </button>
+    <!-- 两级人群选择：先人群组 → 再细分需求 -->
+    <section class="card !p-4 space-y-3">
+      <div class="flex items-center justify-between gap-3 flex-wrap">
+        <p class="text-xs font-semibold text-slate-400">① 选择人群</p>
+        <button
+          class="text-xs font-medium px-3 py-1.5 rounded-md transition-colors"
+          :class="diet.profile.custom ? 'bg-primary-50 text-primary-700' : 'text-slate-400 hover:text-primary-600'"
+          @click="showCustom = true"
+        >
+          {{ diet.profile.custom ? `✨ 已自定义：${diet.profile.custom.summary?.slice(0, 18) || '方案生效中'}…` : '✨ AI 自定义口味/需求/忌口' }}
+        </button>
+      </div>
+
+      <!-- 第一级：人群组 -->
+      <div class="flex flex-wrap gap-2">
+        <button
+          v-for="g in POP_GROUPS"
+          :key="g.id"
+          class="px-3.5 py-2 rounded-md text-sm font-medium border transition-all"
+          :class="activeGroup === g.id ? 'bg-primary-500 text-white !border-primary-500 shadow-card' : 'bg-white text-slate-600 !border-slate-200 hover:!border-primary-300'"
+          @click="activeGroup = g.id"
+        >
+          {{ g.emoji }} {{ g.label }}
+          <span class="text-[11px] opacity-70 ml-1">{{ g.desc }}</span>
+        </button>
+      </div>
+
+      <!-- 第二级：细分需求 -->
+      <div class="pt-1">
+        <p class="text-xs font-semibold text-slate-400 mb-2">② 选择需求 / 状况</p>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <button
+            v-for="pid in POP_GROUPS.find((g) => g.id === activeGroup)!.options"
+            :key="pid"
+            class="!p-3 text-left rounded-md border-2 transition-all"
+            :class="diet.profile.population === pid ? 'bg-primary-50 !border-primary-400 ring-1 ring-primary-100' : 'bg-white !border-slate-100 hover:!border-primary-200'"
+            @click="switchPop(pid)"
+          >
+            <span class="text-lg">{{ POP_MAP[pid].emoji }}</span>
+            <p class="font-semibold text-sm mt-0.5">{{ POP_MAP[pid].label }}</p>
+            <p class="text-[11px] text-slate-400 mt-0.5 leading-snug">{{ POP_MAP[pid].desc }}</p>
+            <p class="text-[11px] text-primary-600 mt-1">{{ POP_MAP[pid].kcalHint }}</p>
+          </button>
+        </div>
+        <p v-if="activePopInfo" class="text-[11px] text-slate-400 mt-2">
+          当前：{{ activePopInfo.label }} · {{ activePopInfo.ageHint }}
+          <template v-if="diet.profile.custom"> · AI 自定义方案已生效（忌口自动避开）</template>
+        </p>
+      </div>
     </section>
 
     <!-- AI 推荐理由 -->
@@ -233,6 +287,15 @@ onMounted(() => fetchPlan())
         </section>
       </div>
     </div>
+
+    <!-- AI 自定义弹窗 -->
+    <CustomPrefDialog
+      v-model:open="showCustom"
+      :population="diet.profile.population"
+      :age="diet.profile.age"
+      :existing="diet.profile.custom ?? null"
+      @save="saveCustom"
+    />
 
     <DisclaimerBar />
   </div>

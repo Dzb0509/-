@@ -7,3 +7,6 @@ dist
 *.log
 .DS_Store
 test-assets
+
+# 运行时生成的菜品图片缓存
+public/dish-imgs/

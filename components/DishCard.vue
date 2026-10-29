@@ -13,6 +13,9 @@ const emit = defineEmits<{ eat: [dish: Dish] }>()
 const diet = useDietStore()
 const showDetail = ref(false)
 const eaten = ref(false)
+/** 图片加载状态（生成失败回退 emoji 占位） */
+const thumbOk = ref(true)
+const heroOk = ref(true)
 
 const flavorColors: Record<string, string> = {
   辣: 'bg-red-50 text-red-500',
@@ -50,7 +53,18 @@ function eat() {
         <h3 class="font-semibold text-[15px] truncate">{{ dish.name }}</h3>
         <p class="text-xs text-slate-400 mt-0.5">{{ dish.highlight }}</p>
       </div>
-      <span class="chip shrink-0 bg-primary-50 text-primary-700">{{ dish.region }}</span>
+      <!-- 真实菜品图（首次访问由 CogView 生成并缓存，失败回退 emoji） -->
+      <div class="shrink-0 w-16 h-16 rounded-md overflow-hidden bg-slate-100">
+        <img
+          v-if="thumbOk"
+          :src="`/api/dish-image?name=${encodeURIComponent(dish.name)}`"
+          :alt="dish.name"
+          class="w-full h-full object-cover"
+          loading="lazy"
+          @error="thumbOk = false"
+        >
+        <div v-else class="w-full h-full flex items-center justify-center text-2xl">🍽️</div>
+      </div>
     </div>
 
     <div class="flex flex-wrap gap-1.5">
@@ -85,6 +99,22 @@ function eat() {
       append-to-body
     >
       <div class="space-y-5 text-sm">
+        <!-- 弹窗大图（真实菜品照片） -->
+        <div class="rounded-md overflow-hidden bg-slate-100 relative" style="height: 220px">
+          <img
+            v-if="heroOk"
+            :src="`/api/dish-image?name=${encodeURIComponent(dish.name)}`"
+            :alt="dish.name"
+            class="w-full h-full object-cover"
+            @error="heroOk = false"
+          >
+          <div v-else class="w-full h-full flex items-center justify-center text-6xl bg-gradient-to-br from-primary-50 to-primary-100">🍽️</div>
+          <div class="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/55 to-transparent px-4 pb-2.5 pt-8 flex items-end justify-between">
+            <span class="text-white font-semibold">{{ dish.name }}</span>
+            <span class="chip bg-white/90 text-primary-700">{{ dish.region }}</span>
+          </div>
+        </div>
+
         <div class="flex items-center gap-2 flex-wrap">
           <span class="chip bg-primary-50 text-primary-700">{{ dish.region }}</span>
           <span

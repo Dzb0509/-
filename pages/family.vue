@@ -2,8 +2,8 @@
 /**
  * 家庭食谱：录入家庭成员（年龄+人群）→ AI 综合生成满足所有人的最优三餐
  */
-import type { RecommendResult, Dish, FamilyMember, PopulationId } from '~/types/recommend'
-import { POPULATIONS } from '~/types/recommend'
+import type { RecommendResult, Dish, FamilyMember, PopulationId, CustomPref } from '~/types/recommend'
+import { POPULATIONS, POP_GROUPS, POP_MAP } from '~/types/recommend'
 import { MEAL_LABELS } from '~/types/diet'
 
 const diet = useDietStore()
@@ -22,6 +22,21 @@ const refreshing = ref<('breakfast' | 'lunch' | 'dinner')[]>([])
 const newLabel = ref('')
 const newAge = ref(30)
 const newPop = ref<PopulationId>('balance')
+
+// AI 自定义弹窗：当前编辑的成员（null = 未打开）
+const customMemberId = ref<string | null>(null)
+const customEditing = computed(() => diet.family.find((m) => m.id === customMemberId.value) ?? null)
+const dialogOpen = computed({
+  get: () => customMemberId.value !== null,
+  set: (v: boolean) => {
+    if (!v) customMemberId.value = null
+  }
+})
+
+function saveMemberCustom(pref: CustomPref) {
+  if (customMemberId.value) diet.updateFamilyMember(customMemberId.value, { custom: pref })
+  plan.value = null
+}
 
 function addMember() {
   if (!newLabel.value.trim()) {
@@ -83,8 +98,8 @@ const familyPopSummary = computed(() =>
   [...new Set(diet.family.map((m) => POPULATIONS.find((p) => p.id === m.population)?.label ?? ''))].filter(Boolean).join(' / ')
 )
 
-const popLabel = (id: PopulationId) => POPULATIONS.find((p) => p.id === id)?.label ?? id
-const popEmoji = (id: PopulationId) => POPULATIONS.find((p) => p.id === id)?.emoji ?? '👤'
+const popLabel = (id: PopulationId) => POP_MAP[id]?.label ?? id
+const popEmoji = (id: PopulationId) => POP_MAP[id]?.emoji ?? '👤'
 </script>
 
 <template>
@@ -108,22 +123,39 @@ const popEmoji = (id: PopulationId) => POPULATIONS.find((p) => p.id === id)?.emo
           <div
             v-for="m in diet.family"
             :key="m.id"
-            class="flex items-center gap-2.5 rounded-lg bg-slate-50 px-3 py-2.5"
+            class="rounded-lg bg-slate-50 px-3 py-2.5"
           >
-            <span class="text-xl">{{ popEmoji(m.population) }}</span>
-            <div class="min-w-0 flex-1">
-              <p class="text-sm font-medium">{{ m.label }} <span class="text-xs text-slate-400 font-normal">{{ m.age }} 岁</span></p>
-              <p class="text-[11px] text-slate-400">{{ popLabel(m.population) }}</p>
+            <div class="flex items-center gap-2.5">
+              <span class="text-xl">{{ popEmoji(m.population) }}</span>
+              <div class="min-w-0 flex-1">
+                <p class="text-sm font-medium">{{ m.label }} <span class="text-xs text-slate-400 font-normal">{{ m.age }} 岁</span></p>
+                <p class="text-[11px] text-slate-400">{{ popLabel(m.population) }}</p>
+              </div>
+              <el-select
+                :model-value="m.population"
+                size="small"
+                class="!w-32"
+                @update:model-value="(v: PopulationId) => { diet.updateFamilyMember(m.id, { population: v }); plan = null }"
+              >
+                <el-option-group v-for="g in POP_GROUPS" :key="g.id" :label="`${g.emoji} ${g.label}`">
+                  <el-option
+                    v-for="pid in g.options"
+                    :key="pid"
+                    :value="pid"
+                    :label="`${POP_MAP[pid].emoji} ${POP_MAP[pid].label}`"
+                  />
+                </el-option-group>
+              </el-select>
+              <button class="text-slate-300 hover:text-red-400 transition-colors text-xs" @click="removeMember(m.id)">✕</button>
             </div>
-            <el-select
-              :model-value="m.population"
-              size="small"
-              class="!w-28"
-              @update:model-value="(v: PopulationId) => { diet.updateFamilyMember(m.id, { population: v }); plan = null }"
+            <!-- 成员 AI 自定义 -->
+            <button
+              class="mt-2 text-[11px] font-medium px-2 py-1 rounded transition-colors"
+              :class="m.custom ? 'bg-primary-50 text-primary-700' : 'text-slate-400 hover:text-primary-600'"
+              @click="customMemberId = m.id"
             >
-              <el-option v-for="p in POPULATIONS" :key="p.id" :value="p.id" :label="p.label" />
-            </el-select>
-            <button class="text-slate-300 hover:text-red-400 transition-colors text-xs" @click="removeMember(m.id)">✕</button>
+              {{ m.custom ? `✨ 已自定义：${m.custom.summary?.slice(0, 16) || '方案生效中'}…` : '✨ AI 自定义口味/忌口' }}
+            </button>
           </div>
         </div>
 
@@ -133,7 +165,14 @@ const popEmoji = (id: PopulationId) => POPULATIONS.find((p) => p.id === id)?.emo
             <el-input v-model="newLabel" placeholder="称呼，如：爸爸" size="small" maxlength="6" class="!w-28" />
             <el-input-number v-model="newAge" :min="1" :max="100" size="small" class="!w-24" />
             <el-select v-model="newPop" size="small" class="flex-1">
-              <el-option v-for="p in POPULATIONS" :key="p.id" :value="p.id" :label="`${p.emoji} ${p.label}`" />
+              <el-option-group v-for="g in POP_GROUPS" :key="g.id" :label="`${g.emoji} ${g.label}`">
+                <el-option
+                  v-for="pid in g.options"
+                  :key="pid"
+                  :value="pid"
+                  :label="`${POP_MAP[pid].emoji} ${POP_MAP[pid].label}`"
+                />
+              </el-option-group>
             </el-select>
           </div>
           <button class="btn-secondary !py-1.5 !text-xs w-full" @click="addMember">+ 添加成员</button>
@@ -193,5 +232,16 @@ const popEmoji = (id: PopulationId) => POPULATIONS.find((p) => p.id === id)?.emo
         </div>
       </div>
     </div>
+
+    <!-- 成员 AI 自定义弹窗 -->
+    <CustomPrefDialog
+      v-if="customEditing"
+      :key="customEditing.id"
+      v-model:open="dialogOpen"
+      :population="customEditing.population"
+      :age="customEditing.age"
+      :existing="customEditing.custom ?? null"
+      @save="saveMemberCustom"
+    />
   </div>
 </template>

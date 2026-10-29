@@ -1,7 +1,17 @@
 import type { Nutrition } from './diet'
 
-/** 人群定位 */
-export type PopulationId = 'balance' | 'lose' | 'muscle' | 'sugar' | 'child' | 'pregnant' | 'elderly'
+/**
+ * 人群采用两级结构：
+ * 第一级「人群组」（POP_GROUPS）：婴幼儿 / 儿童青少年 / 成年人 / 孕产期 / 老年人
+ * 第二级「细分需求」：成年人下分均衡/减脂/增肌/控糖；老年人下分普通/高血压/糖尿病/高血脂等
+ * 保存到 profile.population 的是第二级的具体 id。
+ */
+export type PopulationId =
+  | 'balance' | 'lose' | 'muscle' | 'sugar'                       // 成年人
+  | 'elderly' | 'hypertension' | 'diabetes' | 'hyperlipid'        // 老年人及慢病
+  | 'child'                                                        // 儿童青少年
+  | 'infant' | 'toddler'                                           // 婴幼儿
+  | 'pregnant' | 'lactation'                                       // 孕产期
 
 export interface Population {
   id: PopulationId
@@ -14,23 +24,74 @@ export interface Population {
   kcalHint: string
 }
 
+/** 全部人群（扁平列表：下拉选择/家庭模式用） */
 export const POPULATIONS: Population[] = [
-  { id: 'balance', label: '均衡饮食', emoji: '⚖️', desc: '营养全面，比例合理', ageHint: '18~50岁成人', kcalHint: '1800~2200 kcal' },
-  { id: 'lose', label: '减脂控卡', emoji: '🔥', desc: '热量缺口，高蛋白饱腹', ageHint: '18~50岁成人', kcalHint: '1400~1700 kcal' },
+  // 成年人
+  { id: 'balance', label: '均衡饮食', emoji: '⚖️', desc: '营养全面，比例合理', ageHint: '18~59岁成人', kcalHint: '1800~2200 kcal' },
+  { id: 'lose', label: '减脂控卡', emoji: '🔥', desc: '热量缺口，高蛋白饱腹', ageHint: '18~59岁成人', kcalHint: '1400~1700 kcal' },
   { id: 'muscle', label: '增肌塑形', emoji: '💪', desc: '高蛋白，训练日加餐', ageHint: '18~40岁成人', kcalHint: '2200~2600 kcal' },
   { id: 'sugar', label: '控糖稳糖', emoji: '🩸', desc: '低 GI，缓释碳水', ageHint: '血糖偏高人群', kcalHint: '1600~1900 kcal' },
-  { id: 'child', label: '儿童青少年', emoji: '🧒', desc: '长身体，钙铁锌跟上', ageHint: '6~17岁', kcalHint: '1400~2300 kcal' },
-  { id: 'pregnant', label: '孕产期', emoji: '🤰', desc: '叶酸铁钙，易消化少刺激', ageHint: '孕期/哺乳期', kcalHint: '1900~2300 kcal' },
-  { id: 'elderly', label: '老年人', emoji: '🧓', desc: '软烂易嚼，低盐高钙', ageHint: '60岁以上', kcalHint: '1600~1900 kcal' }
+  // 老年人及慢病细分
+  { id: 'elderly', label: '普通老年', emoji: '🧓', desc: '软烂易嚼，低盐高钙', ageHint: '60岁以上', kcalHint: '1600~1900 kcal' },
+  { id: 'hypertension', label: '高血压', emoji: '🫀', desc: '严格低钠，高钾高钙', ageHint: '高血压人群', kcalHint: '1500~1800 kcal' },
+  { id: 'diabetes', label: '糖尿病', emoji: '🩸', desc: '低 GI 控糖，定时定量', ageHint: '糖尿病人群', kcalHint: '1500~1800 kcal' },
+  { id: 'hyperlipid', label: '高血脂', emoji: '🫁', desc: '低脂低胆固醇，高纤维', ageHint: '血脂偏高人群', kcalHint: '1500~1800 kcal' },
+  // 儿童青少年
+  { id: 'child', label: '儿童青少年', emoji: '🧒', desc: '长身体，钙铁锌跟上', ageHint: '3~17岁', kcalHint: '1400~2300 kcal' },
+  // 婴幼儿
+  { id: 'infant', label: '辅食期婴儿', emoji: '👶', desc: '6~12月龄，无盐无糖细腻泥糊', ageHint: '6~12月龄', kcalHint: '随奶量约 900 kcal' },
+  { id: 'toddler', label: '幼儿', emoji: '🍼', desc: '1~3岁，软烂小块，清淡少盐', ageHint: '1~3岁', kcalHint: '1000~1300 kcal' },
+  // 孕产期
+  { id: 'pregnant', label: '孕期', emoji: '🤰', desc: '叶酸铁钙，易消化少刺激', ageHint: '孕期', kcalHint: '1900~2300 kcal' },
+  { id: 'lactation', label: '哺乳期', emoji: '🤱', desc: '催乳营养，下汤水足', ageHint: '哺乳期', kcalHint: '2100~2500 kcal' }
 ]
 
-/** 家庭成员（家庭模式：按年龄+人群综合出全家最优食谱） */
+export const POP_MAP: Record<string, Population> = Object.fromEntries(POPULATIONS.map((p) => [p.id, p]))
+
+/** 人群组（第一级）：首页「先选人群 → 再选需求」用 */
+export interface PopGroup {
+  id: string
+  label: string
+  emoji: string
+  desc: string
+  options: PopulationId[]
+}
+
+export const POP_GROUPS: PopGroup[] = [
+  { id: 'adult', label: '成年人', emoji: '🧑', desc: '18~59岁', options: ['balance', 'lose', 'muscle', 'sugar'] },
+  { id: 'elderly', label: '老年人', emoji: '🧓', desc: '60岁以上，可按慢病细分', options: ['elderly', 'hypertension', 'diabetes', 'hyperlipid'] },
+  { id: 'child', label: '儿童青少年', emoji: '🧒', desc: '3~17岁，长身体', options: ['child'] },
+  { id: 'infant', label: '婴幼儿', emoji: '👶', desc: '6月龄~3岁，辅食期', options: ['infant', 'toddler'] },
+  { id: 'pregnant', label: '孕产期', emoji: '🤰', desc: '孕期与哺乳期', options: ['pregnant', 'lactation'] }
+]
+
+/** 用户 AI 自定义偏好（口味/需求/忌口），由 /api/customize 生成摘要 */
+export interface CustomPref {
+  /** 口味偏好标签 */
+  flavors: string[]
+  /** 需求描述（如“想控糖但爱吃辣”） */
+  needs: string
+  /** 忌口（如“不吃香菜、海鲜过敏”） */
+  taboos: string
+  /** AI 生成的个性化方案摘要 */
+  summary?: string
+  /** AI 生成：宜吃清单 */
+  goodFor?: string[]
+  /** AI 生成：忌口/慎吃清单 */
+  avoid?: string[]
+  /** AI 生成：注意事项 */
+  tips?: string[]
+}
+
+/** 家庭成员（家庭模式：按年龄+人群综合出全家最优食谱，支持 AI 自定义） */
 export interface FamilyMember {
   id: string
   /** 称呼，如「妈妈」「爷爷」 */
   label: string
   age: number
   population: PopulationId
+  /** 该成员的 AI 自定义（口味/忌口/需求），推荐时一并纳入 */
+  custom?: CustomPref
 }
 
 /** 一道推荐菜（含做法） */

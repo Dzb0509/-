@@ -32,7 +32,7 @@ export interface FoodRecord {
 
 export type GoalType = 'lose' | 'keep' | 'gain'
 
-import type { PopulationId } from './recommend'
+import type { PopulationId, CustomPref } from './recommend'
 
 export interface UserProfile {
   nickname: string
@@ -41,8 +41,10 @@ export interface UserProfile {
   height: number
   weight: number
   goal: GoalType
-  /** 人群定位：均衡/减脂/增肌/控糖（驱动每日推荐） */
+  /** 人群定位（两级结构中的第二级：如 elderly/hypertension/lose 等） */
   population: PopulationId
+  /** AI 自定义偏好（口味/需求/忌口，由 /api/customize 生成摘要） */
+  custom?: CustomPref
 }
 
 /** 计算某食物按当前克重的营养总量 */
