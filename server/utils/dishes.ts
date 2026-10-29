@@ -8,8 +8,9 @@ import type { Dish, PopulationId } from '~/types/recommend'
  * 做法步骤可被 dishes-detail.json（AI 生成的超详细教程）覆盖。
  */
 import detailSteps from './dishes-detail.json'
+import generatedJson from './dishes-generated.json'
 
-const RAW_DISHES: Dish[] = [
+const RAW_HANDWRITTEN: Dish[] = [
   // ---------- 早餐 ----------
   { id: 'd001', name: '燕麦牛奶粥', region: '家常菜', flavors: ['清淡'], pops: ['balance', 'lose', 'sugar', 'muscle', 'child', 'pregnant', 'elderly', 'toddler', 'diabetes', 'hyperlipid', 'hypertension', 'lactation'], nutrition: { kcal: 280, protein: 12, fat: 7, carb: 42 }, ingredients: ['燕麦片 40g', '纯牛奶 250ml', '奇亚籽 5g', '水 200ml'], steps: ['小锅加 200ml 水烧开，倒入燕麦片转小火', '煮 5 分钟并不时搅拌防粘底，至燕麦吸水变稠', '倒入牛奶转小火再煮 2 分钟，关火焖 1 分钟更绵滑', '盛出撒奇亚籽；喜甜可加半根香蕉压泥代替糖'], highlight: '低 GI 慢碳，饱腹感强，全家都能吃' },
   { id: 'd002', name: '全麦鸡蛋三明治', region: '家常菜', flavors: ['清淡'], pops: ['balance', 'lose', 'muscle', 'child', 'pregnant', 'hyperlipid', 'lactation', 'toddler'], nutrition: { kcal: 320, protein: 18, fat: 12, carb: 34 }, ingredients: ['全麦面包 2 片', '鸡蛋 1 个', '生菜 2 片', '番茄 2 片', '低脂芝士 1 片(可选)'], steps: ['鸡蛋冷水下锅，水开后煮 8 分钟，过凉水剥壳切片', '平底锅不加油把面包片烙 30 秒至微脆', '按 面包→生菜→番茄→蛋片→(芝士)→面包 叠放', '保鲜膜裹紧对角切开，断面更整齐也方便携带'], highlight: '优质蛋白+全麦纤维，上学上班都好带' },
@@ -121,6 +122,13 @@ const RAW_DISHES: Dish[] = [
   { id: 'd1101', name: '希腊酸奶莓果杯', region: '家常菜', flavors: ['酸', '甜'], pops: ['lose', 'muscle', 'sugar', 'child', 'pregnant', 'toddler'], nutrition: { kcal: 160, protein: 15, fat: 4, carb: 16 }, ingredients: ['希腊酸奶 150g', '蓝莓 50g', '坚果碎 5g'], steps: ['杯底铺一层酸奶', '一层蓝莓一层酸奶叠加，卖相更好', '顶上撒坚果碎，冷藏 10 分钟口感更佳'], highlight: '加餐蛋白质补给，孕晚期加餐也合适' },
   { id: 'd1102', name: '水煮蛋 + 圣女果', region: '家常菜', flavors: ['清淡'], pops: ['lose', 'balance', 'muscle', 'child', 'elderly', 'toddler', 'hypertension', 'hyperlipid'], nutrition: { kcal: 120, protein: 9, fat: 7, carb: 5 }, ingredients: ['鸡蛋 1 个', '圣女果 8 颗'], steps: ['鸡蛋冷水下锅，水开后煮 8 分钟（溏心 6 分钟）', '过凉水好剥壳', '配圣女果装盒带走即食'], highlight: '零门槛快手加餐，办公室宿舍都能备' }
 ]
+
+/** AI 批量扩充的菜品（scripts/gen-dishes.mjs 生成，已含超详细步骤，每个菜系补足 25 道） */
+const GENERATED: Dish[] = (generatedJson as unknown as Dish[]).filter(
+  (d) => d && d.name && Array.isArray(d.steps) && d.steps.length >= 3
+)
+
+const RAW_DISHES: Dish[] = [...RAW_HANDWRITTEN, ...GENERATED]
 
 export const DISHES: Dish[] = RAW_DISHES.map((d) => {
   // AI 生成的超详细教程（dishes-detail.json）存在时覆盖默认步骤
