@@ -15,11 +15,13 @@ let done = 0
 let fail = 0
 
 for (const name of names) {
+  const t0 = Date.now()
   try {
     const r = await fetch(`${BASE}/api/dish-image?name=${encodeURIComponent(name)}`)
+    const elapsed = Date.now() - t0
     if (r.ok) {
       done++
-      console.log(`✓ ${name}（${done}/${names.length}）`)
+      console.log(`✓ ${name}（${done}/${names.length}）${elapsed < 2000 ? '' : ' [新生成]'}`)
     } else {
       fail++
       console.error(`✗ ${name} HTTP ${r.status}`)
@@ -28,6 +30,8 @@ for (const name of names) {
     fail++
     console.error(`✗ ${name}`, e.message)
   }
-  await new Promise((r) => setTimeout(r, GAP))
+  // 缓存命中（秒回）无需限流间隔，只有真正调 CogView 生成时才需要慢速
+  const elapsed = Date.now() - t0
+  await new Promise((r) => setTimeout(r, elapsed < 2000 ? 200 : GAP))
 }
 console.log(`完成：成功 ${done}，失败 ${fail}`)
