@@ -123,3 +123,37 @@ export interface RecommendResult {
   reason: string
   meals: MealPlan
 }
+
+/** 菜品角色：荤菜 / 素菜 / 汤羹 / 主食（家庭模式「一桌菜」组合用） */
+export type DishRole = 'meat' | 'veg' | 'soup' | 'staple'
+
+export const DISH_ROLE_LABELS: Record<DishRole, string> = {
+  meat: '荤菜',
+  veg: '素菜',
+  soup: '汤羹',
+  staple: '主食'
+}
+
+export const DISH_ROLE_EMOJIS: Record<DishRole, string> = {
+  meat: '🍖',
+  veg: '🥬',
+  soup: '🍲',
+  staple: '🍚'
+}
+
+/** 家庭模式每餐的「一整份」组成：早 3 道（主食+蛋白+果蔬），午晚各 4 道（一荤一素一汤一主食） */
+export const FAMILY_SET: Record<'breakfast' | 'lunch' | 'dinner', DishRole[]> = {
+  breakfast: ['staple', 'meat', 'veg'],
+  lunch: ['meat', 'veg', 'soup', 'staple'],
+  dinner: ['meat', 'veg', 'soup', 'staple']
+}
+
+/** 启发式判定菜品角色（按菜名与食材关键词，无需人工标注） */
+export function dishRole(d: { name: string; ingredients: string[] }): DishRole {
+  const name = d.name ?? ''
+  if (/汤|羹|煲$/.test(name)) return 'soup'
+  if (/粥|米饭|炒饭|烩饭|盖饭|面|馒头|包子|饺子|馄饨|饼|吐司|面包|燕麦|玉米|红薯|土豆泥|年糕|粉/.test(name)) return 'staple'
+  const text = name + (d.ingredients ?? []).join('')
+  if (/肉|鸡|鸭|鹅|鱼|虾|蟹|牛|羊|排|肝|腰|肠|培根|火腿|蛋|海鲜|贝|鳕|鲈|带鱼|黄鳝|鱿鱼/.test(text)) return 'meat'
+  return 'veg'
+}

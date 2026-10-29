@@ -13,9 +13,11 @@ const emit = defineEmits<{ eat: [dish: Dish] }>()
 const diet = useDietStore()
 const showDetail = ref(false)
 const eaten = ref(false)
-/** 图片加载状态（生成失败回退 emoji 占位） */
+/** 图片加载状态（生成失败回退 emoji 占位；加载完成前显示骨架屏） */
 const thumbOk = ref(true)
+const thumbLoaded = ref(false)
 const heroOk = ref(true)
+const heroLoaded = ref(false)
 
 const flavorColors: Record<string, string> = {
   辣: 'bg-red-50 text-red-500',
@@ -53,17 +55,21 @@ function eat() {
         <h3 class="font-semibold text-[15px] truncate">{{ dish.name }}</h3>
         <p class="text-xs text-slate-400 mt-0.5">{{ dish.highlight }}</p>
       </div>
-      <!-- 真实菜品图（首次访问由 CogView 生成并缓存，失败回退 emoji） -->
-      <div class="shrink-0 w-16 h-16 rounded-md overflow-hidden bg-slate-100">
+      <!-- 真实菜品图（首次访问由 CogView 生成并缓存，失败回退 emoji；加载前显示骨架屏） -->
+      <div class="shrink-0 w-16 h-16 rounded-md overflow-hidden bg-slate-100 relative">
+        <div v-if="thumbOk && !thumbLoaded" class="absolute inset-0 animate-pulse bg-slate-200" />
         <img
           v-if="thumbOk"
           :src="`/api/dish-image?name=${encodeURIComponent(dish.name)}`"
           :alt="dish.name"
-          class="w-full h-full object-cover"
+          class="w-full h-full object-cover transition-opacity duration-500"
+          :class="thumbLoaded ? 'opacity-100' : 'opacity-0'"
           loading="lazy"
+          decoding="async"
+          @load="thumbLoaded = true"
           @error="thumbOk = false"
         >
-        <div v-else class="w-full h-full flex items-center justify-center text-2xl">🍽️</div>
+        <div v-if="!thumbOk" class="w-full h-full flex items-center justify-center text-2xl">🍽️</div>
       </div>
     </div>
 
@@ -99,16 +105,20 @@ function eat() {
       append-to-body
     >
       <div class="space-y-5 text-sm">
-        <!-- 弹窗大图（真实菜品照片） -->
+        <!-- 弹窗大图（真实菜品照片，骨架屏过渡） -->
         <div class="rounded-md overflow-hidden bg-slate-100 relative" style="height: 220px">
+          <div v-if="heroOk && !heroLoaded" class="absolute inset-0 animate-pulse bg-slate-200" />
           <img
             v-if="heroOk"
             :src="`/api/dish-image?name=${encodeURIComponent(dish.name)}`"
             :alt="dish.name"
-            class="w-full h-full object-cover"
+            class="w-full h-full object-cover transition-opacity duration-500"
+            :class="heroLoaded ? 'opacity-100' : 'opacity-0'"
+            decoding="async"
+            @load="heroLoaded = true"
             @error="heroOk = false"
           >
-          <div v-else class="w-full h-full flex items-center justify-center text-6xl bg-gradient-to-br from-primary-50 to-primary-100">🍽️</div>
+          <div v-if="!heroOk" class="w-full h-full flex items-center justify-center text-6xl bg-gradient-to-br from-primary-50 to-primary-100">🍽️</div>
           <div class="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/55 to-transparent px-4 pb-2.5 pt-8 flex items-end justify-between">
             <span class="text-white font-semibold">{{ dish.name }}</span>
             <span class="chip bg-white/90 text-primary-700">{{ dish.region }}</span>

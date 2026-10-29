@@ -2,8 +2,8 @@
 /**
  * 家庭食谱：录入家庭成员（年龄+人群）→ AI 综合生成满足所有人的最优三餐
  */
-import type { RecommendResult, Dish, FamilyMember, PopulationId, CustomPref } from '~/types/recommend'
-import { POPULATIONS, POP_GROUPS, POP_MAP } from '~/types/recommend'
+import type { RecommendResult, Dish, FamilyMember, PopulationId, CustomPref, DishRole } from '~/types/recommend'
+import { POPULATIONS, POP_GROUPS, POP_MAP, FAMILY_SET, DISH_ROLE_LABELS, DISH_ROLE_EMOJIS, dishRole } from '~/types/recommend'
 import { MEAL_LABELS } from '~/types/diet'
 
 const diet = useDietStore()
@@ -100,6 +100,28 @@ const familyPopSummary = computed(() =>
 
 const popLabel = (id: PopulationId) => POP_MAP[id]?.label ?? id
 const popEmoji = (id: PopulationId) => POP_MAP[id]?.emoji ?? '👤'
+
+/** 一餐按「一整份」角色分组（一荤一素一汤一主食），无法归类的放「其他」；早餐用专属标签 */
+interface MealGroup { role: DishRole; label: string; emoji: string; dishes: Dish[] }
+const BREAKFAST_ROLE_LABELS: Partial<Record<DishRole, string>> = { meat: '蛋白质', veg: '果蔬', soup: '汤粥' }
+function mealGroups(meal: 'breakfast' | 'lunch' | 'dinner', dishes?: Dish[]): MealGroup[] {
+  if (!dishes?.length) return []
+  const groups: MealGroup[] = []
+  for (const role of FAMILY_SET[meal]) {
+    const ds = dishes.filter((d) => dishRole(d) === role)
+    if (ds.length)
+      groups.push({
+        role,
+        label: meal === 'breakfast' ? (BREAKFAST_ROLE_LABELS[role] ?? DISH_ROLE_LABELS[role]) : DISH_ROLE_LABELS[role],
+        emoji: DISH_ROLE_EMOJIS[role],
+        dishes: ds
+      })
+  }
+  const rest = dishes.filter((d) => !groups.some((g) => g.dishes.includes(d)))
+  if (rest.length) groups.push({ role: 'veg', label: '其他', emoji: '🍴', dishes: rest })
+  return groups
+}
+const mealKcal = (dishes?: Dish[]) => (dishes ?? []).reduce((s, d) => s + d.nutrition.kcal, 0)
 </script>
 
 <template>
@@ -107,7 +129,7 @@ const popEmoji = (id: PopulationId) => POP_MAP[id]?.emoji ?? '👤'
     <header>
       <h1 class="text-2xl font-bold tracking-tight">👨‍👩‍👧‍👦 家庭食谱 · 一桌菜照顾全家</h1>
       <p class="text-sm text-slate-400 mt-1">
-        录入每位家人的年龄与人群，AI 会取「全家营养需求的交集」综合出一张餐桌都能吃的最优食谱
+        录入每位家人的年龄与人群，AI 取「全家营养需求的交集」生成一整份食谱：早餐 3 道，午/晚餐一荤一素一汤一主食
       </p>
     </header>
 
@@ -196,8 +218,8 @@ const popEmoji = (id: PopulationId) => POP_MAP[id]?.emoji ?? '👤'
           </span>
         </section>
 
-        <div v-if="loading" class="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div v-for="i in 3" :key="i" class="card h-64 animate-pulse !bg-slate-50" />
+        <div v-if="loading" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div v-for="i in 8" :key="i" class="card h-64 animate-pulse !bg-slate-50" />
         </div>
 
         <template v-else-if="plan">
@@ -205,22 +227,32 @@ const popEmoji = (id: PopulationId) => POP_MAP[id]?.emoji ?? '👤'
             <div class="flex items-center justify-between px-1">
               <h2 class="font-semibold flex items-center gap-2">
                 <span>{{ m.emoji }}</span> {{ MEAL_LABELS[m.key] }}
+                <span v-if="mealKcal(plan.meals[m.key])" class="chip bg-slate-100 text-slate-500 !text-[11px] font-normal">约 {{ mealKcal(plan.meals[m.key]) }} kcal/人</span>
               </h2>
               <button
                 class="text-xs text-primary-600 hover:text-primary-700 font-medium"
                 :disabled="refreshing.includes(m.key)"
                 @click="fetchPlan([m.key])"
               >
-                {{ refreshing.includes(m.key) ? '换中…' : '换一换 ⟳' }}
+                {{ refreshing.includes(m.key) ? '换中…' : '换一桌 ⟳' }}
               </button>
             </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <DishCard
-                v-for="dish in plan.meals[m.key] ?? []"
-                :key="dish.id"
-                :dish="dish"
-                :meal="m.key"
-              />
+            <!-- 一桌菜：按角色分组（一荤一素一汤一主食） -->
+            <div class="card !p-4 space-y-4">
+              <div v-for="g in mealGroups(m.key, plan.meals[m.key])" :key="g.label">
+                <p class="text-xs font-semibold text-slate-400 mb-2 flex items-center gap-1">
+                  {{ g.emoji }} {{ g.label }}
+                  <span class="text-slate-300 font-normal">· {{ g.dishes.length }} 道</span>
+                </p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <DishCard
+                    v-for="dish in g.dishes"
+                    :key="dish.id"
+                    :dish="dish"
+                    :meal="m.key"
+                  />
+                </div>
+              </div>
             </div>
           </section>
         </template>
@@ -228,7 +260,7 @@ const popEmoji = (id: PopulationId) => POP_MAP[id]?.emoji ?? '👤'
         <div v-else class="card text-center !py-14 space-y-2">
           <p class="text-4xl">🍽️</p>
           <p class="text-slate-500 text-sm">添加家庭成员后，点左侧「生成全家最优食谱」</p>
-          <p class="text-xs text-slate-400">一道菜同时满足孕妈的营养、老人的牙口和孩子的长身体</p>
+          <p class="text-xs text-slate-400">每餐生成一整桌：早餐 3 道，午/晚餐一荤一素一汤一主食，同时照顾孕妈、老人和孩子</p>
         </div>
       </div>
     </div>
