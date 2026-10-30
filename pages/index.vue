@@ -30,12 +30,16 @@ const activeGroup = ref(
 )
 const showCustom = ref(false)
 
+/** 当前请求条件的缓存 key（条件不变时直接展示上次结果，秒开） */
+const planKey = () =>
+  `${diet.profile.population}|${dayMode.value}|${diet.profile.custom?.summary ?? ''}|${diet.yesterdayNames.length}`
+
 /** 请求序号：快速连点时只让最新一次请求的结果生效（防旧响应覆盖新响应） */
 let reqSeq = 0
-async function fetchPlan(meals?: ('breakfast' | 'lunch' | 'dinner')[]) {
+async function fetchPlan(meals?: ('breakfast' | 'lunch' | 'dinner')[], opts?: { silent?: boolean }) {
   const seq = ++reqSeq
   if (meals?.length) refreshing.value = [...meals]
-  else loading.value = true
+  else if (!opts?.silent) loading.value = true
   try {
     const res = await $fetch<RecommendResult>('/api/recommend', {
       method: 'POST',
@@ -56,9 +60,10 @@ async function fetchPlan(meals?: ('breakfast' | 'lunch' | 'dinner')[]) {
       plan.value.source = res.source
     } else {
       plan.value = res
+      diet.cachePlan(planKey(), res)
     }
   } catch {
-    if (seq === reqSeq) ElMessage.error('推荐生成失败，请稍后重试')
+    if (seq === reqSeq && !opts?.silent) ElMessage.error('推荐生成失败，请稍后重试')
   } finally {
     if (seq === reqSeq) {
       loading.value = false
@@ -113,7 +118,17 @@ const greeting = computed(() => {
 
 const activePopInfo = computed(() => POP_MAP[diet.profile.population])
 
-onMounted(() => fetchPlan())
+onMounted(() => {
+  const cached = diet.planCache[planKey()]
+  if (cached?.meals) {
+    // 有缓存：先展示上次结果（秒开），后台静默刷新为最新推荐
+    plan.value = cached
+    loading.value = false
+    fetchPlan(undefined, { silent: true })
+  } else {
+    fetchPlan()
+  }
+})
 </script>
 
 <template>

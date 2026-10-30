@@ -95,15 +95,19 @@ function removeMember(id: string) {
 
 /** 请求序号：快速连点时只让最新一次请求的结果生效 */
 let reqSeq = 0
-async function fetchPlan(meals?: ('breakfast' | 'lunch' | 'dinner')[]) {
+/** 当前家庭构成 + 家传菜谱的缓存 key（构成不变时进页面直接展示上次结果） */
+const planKey = () =>
+  `family|${diet.family.map((m) => `${m.id}:${m.age}:${m.population}:${m.custom?.summary ?? ''}`).join(',')}|r${diet.userRecipes.length}`
+
+async function fetchPlan(meals?: ('breakfast' | 'lunch' | 'dinner')[], opts?: { silent?: boolean }) {
   if (!diet.family.length) {
     ElMessage.warning('先添加至少一位家庭成员')
     return
   }
-  if (loading.value && !meals?.length) return // 整桌生成中不允许重复触发
+  if (loading.value && !meals?.length && !opts?.silent) return // 整桌生成中不允许重复触发
   const seq = ++reqSeq
   if (meals?.length) refreshing.value = [...meals]
-  else loading.value = true
+  else if (!opts?.silent) loading.value = true
   try {
     const res = await $fetch<RecommendResult>('/api/recommend', {
       method: 'POST',
@@ -122,9 +126,10 @@ async function fetchPlan(meals?: ('breakfast' | 'lunch' | 'dinner')[]) {
       plan.value.source = res.source
     } else {
       plan.value = res
+      diet.cachePlan(planKey(), res)
     }
   } catch {
-    if (seq === reqSeq) ElMessage.error('生成失败，请稍后重试')
+    if (seq === reqSeq && !opts?.silent) ElMessage.error('生成失败，请稍后重试')
   } finally {
     if (seq === reqSeq) {
       loading.value = false
@@ -173,8 +178,8 @@ const mealKcal = (dishes?: Dish[]) => (dishes ?? []).reduce((s, d) => s + d.nutr
     </header>
 
     <div class="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
-      <!-- 左：成员管理 -->
-      <section class="card space-y-4">
+      <!-- 左：成员管理（滚动时固定，方便随时调整成员再重新生成） -->
+      <section class="card space-y-4 xl:sticky xl:top-6 xl:max-h-[calc(100vh-3rem)] xl:overflow-y-auto">
         <div class="flex items-center justify-between">
           <h2 class="font-semibold">家庭成员（{{ diet.family.length }}）</h2>
           <span class="text-[11px] text-slate-400">保存于本机</span>

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import type { FoodItem, FoodRecord, UserProfile } from '~/types/diet'
-import type { Dish, FamilyMember, PopulationId, UserRecipe } from '~/types/recommend'
+import type { Dish, FamilyMember, PopulationId, UserRecipe, RecommendResult } from '~/types/recommend'
 import { sumNutrition, guessMeal } from '~/types/diet'
 import { learnTaste, emptyTaste, type TasteProfile } from '~/types/taste'
 
@@ -42,7 +42,9 @@ export const useDietStore = defineStore('diet', {
       /** 待确认的识餐结果（上传后 → 结果页确认） */
       pending: null as { image: string; foods: FoodItem[] } | null,
       /** 用户上传的家传菜谱（参与全家推荐） */
-      userRecipes: (persisted?.userRecipes ?? []) as UserRecipe[]
+      userRecipes: (persisted?.userRecipes ?? []) as UserRecipe[],
+      /** 推荐结果缓存（按请求条件做 key）：进页面先展示上次结果再后台刷新，免骨架屏等待 */
+      planCache: (persisted?.planCache ?? {}) as Record<string, RecommendResult>
     }
   },
 
@@ -139,6 +141,14 @@ export const useDietStore = defineStore('diet', {
       this.userRecipes = this.userRecipes.filter((r) => r.id !== id)
       this.persist()
     },
+    /** 缓存推荐结果（key = 请求条件摘要，如 population|day|custom） */
+    cachePlan(key: string, plan: RecommendResult) {
+      this.planCache[key] = plan
+      // 只保留最近 8 份，防 localStorage 膨胀
+      const keys = Object.keys(this.planCache)
+      if (keys.length > 8) for (const k of keys.slice(0, keys.length - 8)) delete this.planCache[k]
+      this.persist()
+    },
     /** 把一道推荐菜按单人份写入今日餐盘（蛋白质等按菜品整份营养计算） */
     addDish(dish: Dish, meal: FoodRecord['meal'] = guessMeal()) {
       const item: FoodItem = {
@@ -163,7 +173,7 @@ export const useDietStore = defineStore('diet', {
       // 骨架阶段使用 localStorage；正式版计划升级为 IndexedDB（接口保持一致）
       localStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify({ records: this.records, profile: this.profile, family: this.family, userRecipes: this.userRecipes })
+        JSON.stringify({ records: this.records, profile: this.profile, family: this.family, userRecipes: this.userRecipes, planCache: this.planCache })
       )
     }
   }
