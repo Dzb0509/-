@@ -76,7 +76,7 @@ onUnmounted(() => {
         <div class="hidden md:block relative bg-primary-50">
           <img
             v-if="imgOk[i]"
-            :src="`/api/dish-image?name=${encodeURIComponent(s.img)}`"
+            :src="`/api/dish-image?name=${encodeURIComponent(s.img)}&v=20261030`"
             :alt="s.title"
             class="absolute inset-0 w-full h-full object-cover"
             loading="lazy"

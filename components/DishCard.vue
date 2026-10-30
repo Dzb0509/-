@@ -22,8 +22,12 @@ const heroLoaded = ref(false)
 const imgVer = ref(0)
 const regenerating = ref(false)
 
+/** 全局图片版本号：批量替换缓存图后递增，强制浏览器丢弃旧图缓存 */
+const IMG_GLOBAL_VER = '20261030'
+
 const imgUrl = computed(
-  () => `/api/dish-image?name=${encodeURIComponent(props.dish.name)}${imgVer.value ? `&v=${imgVer.value}` : ''}`
+  () =>
+    `/api/dish-image?name=${encodeURIComponent(props.dish.name)}&v=${IMG_GLOBAL_VER}${imgVer.value ? `-${imgVer.value}` : ''}`
 )
 
 /** 图片与菜对不上时：调 regen=1 让服务端删缓存重生成，成功后刷新展示 */
