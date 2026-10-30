@@ -50,6 +50,18 @@ async function download(url) {
   }
 }
 
+/** 裁掉四边 12%（水印/Logo 几乎都在角落）再缩放到 512 JPEG */
+async function toCleanJpg(raw) {
+  const meta = await sharp(raw).metadata()
+  const w = Math.floor(meta.width * 0.76)
+  const h = Math.floor(meta.height * 0.76)
+  return sharp(raw)
+    .extract({ left: Math.floor(meta.width * 0.12), top: Math.floor(meta.height * 0.12), width: w, height: h })
+    .resize(512, 512, { fit: 'cover' })
+    .jpeg({ quality: 82 })
+    .toBuffer()
+}
+
 /** 双关卡质检：两个独立角度的提问都通过才收 */
 async function strictCheck(core, imgBuf) {
   const b64 = imgBuf.toString('base64')
@@ -57,7 +69,7 @@ async function strictCheck(core, imgBuf) {
     // 关卡 1：这道菜本体检查
     `这道中国菜叫「${core}」。请仔细看图回答：照片里的食物主体是否就是这个菜（核心食材与成品形态相符）？注意排除：别的菜、生的食材、步骤过程图、菜单封面。只输出 JSON：{"ok":true} 或 {"ok":false,"reason":"画面里实际是..."}`,
     // 关卡 2：干净度检查（反水印/反无关物）
-    `看这张照片，逐项检查：①画面中有没有文字、水印、Logo、二维码？②有没有人物、人脸、手？③主体是不是一盘/一碗做好的成品菜（而不是风景、建筑、动物、人物或截图）？全部符合才输出 {"ok":true}，否则 {"ok":false,"reason":"..."}`
+    `看这张照片，逐项检查：①仔细看画面四角和边缘，有没有任何文字、数字、水印、Logo、二维码（哪怕很小的半透明字）？②有没有人物、人脸、手？③主体是不是一盘/一碗做好的成品菜（而不是风景、建筑、动物、人物或截图）？全部符合才输出 {"ok":true}，否则 {"ok":false,"reason":"..."}`
   ]
   for (const q of prompts) {
     let ok = false
@@ -98,11 +110,20 @@ async function strictCheck(core, imgBuf) {
 }
 
 const reportFile = path.join(process.cwd(), 'scripts', 'qa-images-report.json')
-if (!fs.existsSync(reportFile)) {
-  console.error('未找到 qa-images-report.json，先跑 qa-images.mjs')
+const okCacheFile = path.join(process.cwd(), 'scripts', '.qa-ok.json')
+if (!fs.existsSync(okCacheFile)) {
+  console.error('未找到 .qa-ok.json，先跑 qa-images.mjs 全量质检')
   process.exit(1)
 }
-const { mismatches } = JSON.parse(fs.readFileSync(reportFile, 'utf8'))
+// qa-images-report.json 未保存 mismatches 明细，用 .qa-ok.json 反推：不在通过名单里的即错图
+const okCache = new Set(JSON.parse(fs.readFileSync(okCacheFile, 'utf8')))
+const { dishes } = await (await fetch('http://localhost:3000/api/dishes')).json()
+const notes = fs.existsSync(reportFile)
+  ? Object.fromEntries((JSON.parse(fs.readFileSync(reportFile, 'utf8')).stillBad ?? []).map((x) => [x.name, x.note]))
+  : {}
+const mismatches = [...new Set(dishes.map((d) => d.name))]
+  .filter((n) => !okCache.has(n))
+  .map((name) => ({ name, note: notes[name] ?? '质检未通过' }))
 console.log(`待修复 ${mismatches.length} 张错图`)
 
 const left = []
@@ -124,7 +145,7 @@ for (const { name, note } of mismatches) {
       if (!raw) continue
       let jpg
       try {
-        jpg = await sharp(raw).resize(512, 512, { fit: 'cover' }).jpeg({ quality: 82 }).toBuffer()
+        jpg = await toCleanJpg(raw)
       } catch {
         continue
       }
