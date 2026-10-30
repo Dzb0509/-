@@ -179,7 +179,7 @@ const mealKcal = (dishes?: Dish[]) => (dishes ?? []).reduce((s, d) => s + d.nutr
 
     <div class="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
       <!-- 左：成员管理（滚动时固定，方便随时调整成员再重新生成） -->
-      <section class="card space-y-4 xl:sticky xl:top-6 xl:max-h-[calc(100vh-3rem)] xl:overflow-y-auto">
+      <section class="card space-y-4 lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto">
         <div class="flex items-center justify-between">
           <h2 class="font-semibold">家庭成员（{{ diet.family.length }}）</h2>
           <span class="text-[11px] text-slate-400">保存于本机</span>

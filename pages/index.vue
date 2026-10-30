@@ -260,7 +260,7 @@ onMounted(() => {
       </div>
 
       <!-- 右：概览 / 口味画像 / 识餐辅助 -->
-      <div class="space-y-5 xl:sticky xl:top-6">
+      <div class="space-y-5 lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto">
         <!-- 今日概览 -->
         <section class="card">
           <div class="flex items-center justify-between mb-4">

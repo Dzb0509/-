@@ -68,7 +68,7 @@ function kcal(r: (typeof diet.records)[number]) {
       </div>
 
       <!-- 右：拍照识餐（辅助） -->
-      <div class="space-y-5 xl:sticky xl:top-6">
+      <div class="space-y-5 lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto">
         <section class="card">
           <h2 class="font-semibold text-sm mb-1">📷 拍照识餐</h2>
           <p class="text-[11px] text-slate-400 mb-3">
