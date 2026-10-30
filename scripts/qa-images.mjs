@@ -113,8 +113,12 @@ saveOkCache()
 console.log(`核对完成：本次核对 ${checked} 张（缓存跳过 ${okCache.size - (okCache.size - checked + mismatches.length)} 张），不匹配 ${mismatches.length} 张，无图 ${errors.length}`)
 
 // ---- 阶段 2：重新生成不匹配的并复检一次 ----
+// 默认只输出报告（修复走免费的 scripts/fix-mismatch.mjs 网络找图）；
+// 加 --fix-ai 才用 CogView-4 重生成（0.06 元/张，需余额）
+const FIX_AI = process.argv.includes('--fix-ai')
 const stillBad = []
-for (const { name, note } of mismatches) {
+if (FIX_AI) {
+  for (const { name, note } of mismatches) {
   const ok = await regen(name)
   if (!ok) {
     stillBad.push({ name, note: `${note}（重生成失败）` })
@@ -132,6 +136,9 @@ for (const { name, note } of mismatches) {
     console.log(`✓ ${name} 重生成后已匹配`)
   }
   await sleep(2500)
+  }
+} else if (mismatches.length) {
+  console.log(`（默认不花 AI 费用重生成；${mismatches.length} 张错图交给 scripts/fix-mismatch.mjs 免费网络找图修复）`)
 }
 
 fs.writeFileSync(

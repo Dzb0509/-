@@ -127,10 +127,19 @@ export default defineEventHandler(async (event) => {
   // regen=1：跳过缓存读取直接重新生成（generate 内 writeFileSync 覆盖旧图，
   // 不做文件删除——删除类操作在受控环境下会被安全护栏拦截且失败时旧图还在，更稳）
 
-  // 缓存命中：直接回图片（旧 PNG 顺手转 JPEG 落盘）
+  // 缓存命中：直接回图片（旧 PNG 顺手转 JPEG 落盘）。
+  // no-cache + ETag：浏览器每次协商校验（命中 304 不传 body），
+  // 保证缓存图被替换后浏览器立即拿到新图，不会展示一天前的旧错图
   if (!regen && fs.existsSync(jpgFile)) {
-    setHeader(event, 'Cache-Control', 'public, max-age=86400')
-    return send(event, fs.readFileSync(jpgFile), 'image/jpeg')
+    const buf = fs.readFileSync(jpgFile)
+    const etag = `"${createHash('md5').update(buf).digest('hex')}"`
+    setHeader(event, 'Cache-Control', 'no-cache')
+    setHeader(event, 'ETag', etag)
+    if (event.node.req.headers['if-none-match'] === etag) {
+      setResponseStatus(event, 304)
+      return
+    }
+    return send(event, buf, 'image/jpeg')
   }
   if (!regen && fs.existsSync(pngFile)) {
     try {
