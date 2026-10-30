@@ -109,21 +109,29 @@ async function strictCheck(core, imgBuf) {
   return true
 }
 
-const reportFile = path.join(process.cwd(), 'scripts', 'qa-images-report.json')
-const okCacheFile = path.join(process.cwd(), 'scripts', '.qa-ok.json')
-if (!fs.existsSync(okCacheFile)) {
-  console.error('未找到 .qa-ok.json，先跑 qa-images.mjs 全量质检')
-  process.exit(1)
+// 优先用 --list 指定的菜名清单（用户点名重换）；否则用 .qa-ok.json 反推质检错图
+const listIdx = process.argv.indexOf('--list')
+let mismatches
+if (listIdx > -1) {
+  mismatches = JSON.parse(fs.readFileSync(path.resolve(process.argv[listIdx + 1]), 'utf8'))
+    .map((n) => ({ name: typeof n === 'string' ? n : n.name, note: '用户点名重换' }))
+} else {
+  const reportFile = path.join(process.cwd(), 'scripts', 'qa-images-report.json')
+  const okCacheFile = path.join(process.cwd(), 'scripts', '.qa-ok.json')
+  if (!fs.existsSync(okCacheFile)) {
+    console.error('未找到 .qa-ok.json，先跑 qa-images.mjs 全量质检')
+    process.exit(1)
+  }
+  // qa-images-report.json 未保存 mismatches 明细，用 .qa-ok.json 反推：不在通过名单里的即错图
+  const okCache = new Set(JSON.parse(fs.readFileSync(okCacheFile, 'utf8')))
+  const { dishes } = await (await fetch('http://localhost:3000/api/dishes')).json()
+  const notes = fs.existsSync(reportFile)
+    ? Object.fromEntries((JSON.parse(fs.readFileSync(reportFile, 'utf8')).stillBad ?? []).map((x) => [x.name, x.note]))
+    : {}
+  mismatches = [...new Set(dishes.map((d) => d.name))]
+    .filter((n) => !okCache.has(n))
+    .map((name) => ({ name, note: notes[name] ?? '质检未通过' }))
 }
-// qa-images-report.json 未保存 mismatches 明细，用 .qa-ok.json 反推：不在通过名单里的即错图
-const okCache = new Set(JSON.parse(fs.readFileSync(okCacheFile, 'utf8')))
-const { dishes } = await (await fetch('http://localhost:3000/api/dishes')).json()
-const notes = fs.existsSync(reportFile)
-  ? Object.fromEntries((JSON.parse(fs.readFileSync(reportFile, 'utf8')).stillBad ?? []).map((x) => [x.name, x.note]))
-  : {}
-const mismatches = [...new Set(dishes.map((d) => d.name))]
-  .filter((n) => !okCache.has(n))
-  .map((name) => ({ name, note: notes[name] ?? '质检未通过' }))
 console.log(`待修复 ${mismatches.length} 张错图`)
 
 const left = []
