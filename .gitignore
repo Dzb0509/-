@@ -10,3 +10,9 @@ test-assets
 
 # 运行时生成的菜品图片缓存
 public/dish-imgs/
+
+# 图片质检脚本中间产物
+scripts/.qa-ok.json
+scripts/.webimg-*.json
+scripts/fix-mismatch-left.json
+scripts/qa-images-report.json
