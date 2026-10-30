@@ -234,66 +234,85 @@ export default defineEventHandler(async (handler): Promise<RecommendResult> => {
       const MEAL_LABEL: Record<MealKey, string> = { breakfast: '早餐', lunch: '午餐', dinner: '晚餐' }
 
       let glmReason = ''
-      /** 家庭模式：逐餐串行调用，联网搜索贴合家庭构成的菜谱 + 强制跨餐不重复 */
+      /** 家庭模式：三餐并行（联网搜索与 GLM 择优同时进行），跨餐不重复由「禁选名单 + usedIds 兜底去重」保证 */
       if (isFamily) {
-        const pickedNames: string[] = []
         const reasons: string[] = []
         const out: RecommendResult = { source: 'glm', reason: '', meals: {} }
-        for (const meal of meals) {
-          const roleName = meal === 'breakfast' ? '主食+蛋白质+蔬果各一道' : '一荤、一素、一汤、一主食'
-          const candidates = buildFamilyCandidates(meal, body, FAMILY_SET[meal], userDishes)
-          // 联网搜索贴合本家庭构成的菜谱灵感（失败静默跳过）
-          const webHits = await webSearch(
-            `适合${userLabel}的${MEAL_LABEL[meal]}家常菜谱 ${roleName} 营养搭配做法`,
-            5
-          )
-          const webBlock = webHits.length
-            ? `\n【联网搜索参考】（如其中确有比候选更贴合本家庭需求的菜谱，可改写为一道完整菜谱放入 webDishes；否则留空数组）\n${webHitsToPrompt(webHits)}`
-            : ''
-          const sys = `${baseSys}为本餐组成一整份餐桌套餐：${roleName}。候选菜中的 role 字段标注了每道菜的角色（meat荤/veg素/soup汤/staple主食），请严格按角色各挑一道；source 为 user 的是用户家传菜谱，请优先采用。菜品不得与「已定菜单」重复。并用不超过 40 字说明本餐这样搭配照顾了哪些成员。
+
+        // 第 1 步：三餐候选与联网搜索并行准备（互不阻塞）
+        const prep = await Promise.all(
+          meals.map(async (meal) => {
+            const roleName = meal === 'breakfast' ? '主食+蛋白质+蔬果各一道' : '一荤、一素、一汤、一主食'
+            const candidates = buildFamilyCandidates(meal, body, FAMILY_SET[meal], userDishes)
+            // 联网搜索贴合本家庭构成的菜谱灵感（失败静默跳过；有 10 分钟缓存）
+            const webHits = await webSearch(
+              `适合${userLabel}的${MEAL_LABEL[meal]}家常菜谱 ${roleName} 营养搭配做法`,
+              5
+            )
+            const webBlock = webHits.length
+              ? `\n【联网搜索参考】（如其中确有比候选更贴合本家庭需求的菜谱，可改写为一道完整菜谱放入 webDishes；否则留空数组）\n${webHitsToPrompt(webHits)}`
+              : ''
+            return { meal, candidates, webBlock }
+          })
+        )
+
+        // 第 2 步：三餐 GLM 择优并行执行（单餐失败只降级该餐，不影响其他餐）
+        await Promise.all(
+          prep.map(async ({ meal, candidates, webBlock }) => {
+            const roleName = meal === 'breakfast' ? '主食+蛋白质+蔬果各一道' : '一荤、一素、一汤、一主食'
+            const sys = `${baseSys}为本餐组成一整份餐桌套餐：${roleName}。候选菜中的 role 字段标注了每道菜的角色（meat荤/veg素/soup汤/staple主食），请严格按角色各挑一道；source 为 user 的是用户家传菜谱，请优先采用。菜品不得出现在「禁止选择」名单中。并用不超过 40 字说明本餐这样搭配照顾了哪些成员。
 严格输出 JSON：{"reason":"...","ids":["id1","id2"],"webDishes":[{"name":"菜名","region":"菜系","flavors":["口味"],"kcal":300,"protein":15,"fat":10,"carb":30,"ingredients":["食材1","食材2"],"steps":["步骤1","步骤2"],"highlight":"一句话适合理由"}]}（ids 恰好 ${FAMILY_SET[meal].length} 个且必须来自候选列表；webDishes 通常为空数组，最多 1 道，steps 需 3-6 步可操作）`
-          const user = `家庭构成：${userLabel}${tasteText.length ? `，口味偏好：${tasteText.join('、')}` : '（暂无口味数据）'}
-已定菜单（绝对不能重复）：${pickedNames.join('、') || '无'}
+            // 其他餐次的候选菜名作为禁选名单（并行时无法传"已定菜单"，用候选名单近似规避跨餐重复）
+            const otherNames = prep
+              .filter((p) => p.meal !== meal)
+              .flatMap((p) => p.candidates.map((c) => c.name))
+            const user = `家庭构成：${userLabel}${tasteText.length ? `，口味偏好：${tasteText.join('、')}` : '（暂无口味数据）'}
+禁止选择（其他餐次候选，避免跨餐重复）：${otherNames.join('、') || '无'}
 膳食指南参考：${guide.join('；') || '主食粗细搭配，每餐有蛋白质与蔬菜'}${webBlock}
 本餐候选菜：${JSON.stringify(candidates)}`
-          const res = await llmChat([
-            { role: 'system', content: sys },
-            { role: 'user', content: user }
-          ])
-          const text: string = res.choices?.[0]?.message?.content ?? ''
-          const m = text.match(/\{[\s\S]*\}/)
-          let glmDishes: Dish[] = []
-          let webDishes: Dish[] = []
-          if (m) {
-            const parsed = JSON.parse(m[0])
-            const ids: string[] = Array.isArray(parsed.ids) ? parsed.ids : []
-            glmDishes = ids.map((id) => DISHES.find((d) => d.id === id)).filter(Boolean) as Dish[]
-            if (Array.isArray(parsed.webDishes)) {
-              webDishes = parsed.webDishes.slice(0, 1).map((w: any) => ({
-                id: `web-${createHash('md5').update(String(w?.name ?? '')).digest('hex').slice(0, 8)}`,
-                name: String(w?.name ?? '').slice(0, 20),
-                region: String(w?.region ?? '联网新菜谱').slice(0, 10) || '联网新菜谱',
-                flavors: Array.isArray(w?.flavors) ? w.flavors.slice(0, 3).map(String) : [],
-                pops: [],
-                nutrition: {
-                  kcal: Number(w?.kcal) || 300,
-                  protein: Number(w?.protein) || 15,
-                  fat: Number(w?.fat) || 10,
-                  carb: Number(w?.carb) || 30
-                },
-                ingredients: Array.isArray(w?.ingredients) ? w.ingredients.slice(0, 12).map(String) : [],
-                steps: Array.isArray(w?.steps) ? w.steps.slice(0, 12).map(String) : [],
-                highlight: String(w?.highlight ?? 'AI 联网搜索并改写的菜谱').slice(0, 60),
-                source: 'web' as const
-              })).filter((d) => d.name && d.steps.length && !tabooHit(d, body.custom?.taboos))
+            try {
+              const res = await llmChat([
+                { role: 'system', content: sys },
+                { role: 'user', content: user }
+              ])
+              const text: string = res.choices?.[0]?.message?.content ?? ''
+              const m = text.match(/\{[\s\S]*\}/)
+              let glmDishes: Dish[] = []
+              let webDishes: Dish[] = []
+              if (m) {
+                const parsed = JSON.parse(m[0])
+                const ids: string[] = Array.isArray(parsed.ids) ? parsed.ids : []
+                glmDishes = ids.map((id) => DISHES.find((d) => d.id === id)).filter(Boolean) as Dish[]
+                if (Array.isArray(parsed.webDishes)) {
+                  webDishes = parsed.webDishes.slice(0, 1).map((w: any) => ({
+                    id: `web-${createHash('md5').update(String(w?.name ?? '')).digest('hex').slice(0, 8)}`,
+                    name: String(w?.name ?? '').slice(0, 20),
+                    region: String(w?.region ?? '联网新菜谱').slice(0, 10) || '联网新菜谱',
+                    flavors: Array.isArray(w?.flavors) ? w.flavors.slice(0, 3).map(String) : [],
+                    pops: [],
+                    nutrition: {
+                      kcal: Number(w?.kcal) || 300,
+                      protein: Number(w?.protein) || 15,
+                      fat: Number(w?.fat) || 10,
+                      carb: Number(w?.carb) || 30
+                    },
+                    ingredients: Array.isArray(w?.ingredients) ? w.ingredients.slice(0, 12).map(String) : [],
+                    steps: Array.isArray(w?.steps) ? w.steps.slice(0, 12).map(String) : [],
+                    highlight: String(w?.highlight ?? 'AI 联网搜索并改写的菜谱').slice(0, 60),
+                    source: 'web' as const
+                  })).filter((d) => d.name && d.steps.length && !tabooHit(d, body.custom?.taboos))
+                }
+                const r = String(parsed.reason ?? '').trim()
+                if (r) reasons.push(r.slice(0, 60))
+              }
+              // usedIds 兜底去重：即便 GLM 无视禁选名单，跨餐重复菜也会被规则引擎替换
+              out.meals[meal] = composeFamilySet(meal, [...glmDishes, ...webDishes], ruleResult.meals[meal] ?? [], usedIds, userDishes)
+            } catch (mealErr: any) {
+              console.error(`[recommend] 家庭模式 ${meal} 餐 GLM 失败，本餐降级规则引擎：`, mealErr?.message)
+              out.meals[meal] = composeFamilySet(meal, [], ruleResult.meals[meal] ?? [], usedIds, userDishes)
             }
-            const r = String(parsed.reason ?? '').trim()
-            if (r) reasons.push(r.slice(0, 60))
-          }
-          const set = composeFamilySet(meal, [...glmDishes, ...webDishes], ruleResult.meals[meal] ?? [], usedIds, userDishes)
-          out.meals[meal] = set
-          set.forEach((d) => pickedNames.push(d.name))
-        }
+          })
+        )
         glmReason = reasons.join(' ')
         return { ...out, reason: glmReason.slice(0, 160) }
       }

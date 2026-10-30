@@ -12,28 +12,44 @@ export interface WebHit {
   media?: string
 }
 
+/** 同 query 短期内存缓存：重复生成时免重复搜索（省钱省时） */
+const searchCache = new Map<string, { hits: WebHit[]; ts: number }>()
+const CACHE_TTL = 10 * 60 * 1000
+
 export async function webSearch(query: string, count = 5): Promise<WebHit[]> {
-  const key = process.env.ZHIPU_API_KEY
-  if (!key) return []
+  const key = query.slice(0, 100)
+  const cached = searchCache.get(key)
+  if (cached && Date.now() - cached.ts < CACHE_TTL) return cached.hits
+  const apiKey = process.env.ZHIPU_API_KEY
+  if (!apiKey) return []
   try {
     const res = await fetch('https://open.bigmodel.cn/api/paas/v4/web_search', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
         search_engine: 'search_std',
-        search_query: query.slice(0, 100),
+        search_query: key,
         count
       }),
       signal: AbortSignal.timeout(10000)
     })
     if (!res.ok) throw new Error(`上游 ${res.status}`)
     const data: any = await res.json()
-    return (data?.search_result ?? []).map((r: any) => ({
+    const hits: WebHit[] = (data?.search_result ?? []).map((r: any) => ({
       title: String(r.title ?? ''),
       content: String(r.content ?? '').slice(0, 300),
       link: r.link,
       media: r.media
     }))
+    if (hits.length) {
+      searchCache.set(key, { hits, ts: Date.now() })
+      // 简单容量控制：超限删最早写入的
+      if (searchCache.size > 60) {
+        const oldest = searchCache.keys().next().value
+        if (oldest) searchCache.delete(oldest)
+      }
+    }
+    return hits
   } catch (err: any) {
     console.warn('[websearch] 搜索失败（已跳过联网参考）:', err?.message)
     return []
