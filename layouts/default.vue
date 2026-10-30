@@ -13,7 +13,7 @@ const navItems = [
 <template>
   <div class="flex min-h-screen">
     <!-- 桌面侧边栏 -->
-    <aside class="hidden md:flex flex-col w-60 shrink-0 border-r border-slate-100 bg-white px-4 py-6">
+    <aside class="hidden md:flex flex-col w-60 shrink-0 border-r border-slate-100 bg-white px-4 py-6 sticky top-0 h-screen overflow-y-auto">
       <NuxtLink to="/" class="flex items-center gap-2.5 px-2 mb-8">
         <span class="w-9 h-9 rounded-xl bg-primary-50 flex items-center justify-center text-xl">🥗</span>
         <span class="text-lg font-bold tracking-tight">食刻 AI</span>
