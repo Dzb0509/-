@@ -4,13 +4,15 @@ import fs from 'node:fs'
 import path from 'node:path'
 import sharp from 'sharp'
 import { DISHES } from '../utils/dishes'
+import { fetchBingDishImage } from '../utils/bingimg'
 
 /**
  * 菜品真实图片：按菜名用智谱 CogView-3-Flash（免费）生成真实感菜品照片。
  * 直接返回 JPEG 二进制，可作 <img src> 使用（DishCard / HeroCarousel）。
  * - 生成后经 sharp 压成 512px JPEG（体积 ~1/10，加载快）
  * - 首次生成后落盘 public/dish-imgs/{slug}.jpg，之后命中本地文件秒回
- * - ?regen=1 删除缓存强制重新生成（图片与菜名对不上时用）
+ * - ?regen=1 删除缓存强制重新生成（CogView AI 生成，慢且计费）
+ * - ?alt=N 「换一张」轮换：必应网络图候选（0 元），命中本地缓存毫秒级返回
  * - 旧版 PNG 缓存读取时自动转 JPEG 并替换
  * - 并发去重：同名请求共享同一次生成的 Promise；失败返回 404，前端回退 emoji 占位
  */
@@ -115,6 +117,9 @@ async function generate(name: string, slug: string): Promise<Buffer | null> {
 export default defineEventHandler(async (event) => {
   const name = String(getQuery(event).name ?? '').trim().slice(0, 30)
   const regen = getQuery(event).regen === '1'
+  // alt=N（1~9）：「换一张」轮换——命中 {slug}-a{N}.jpg 缓存毫秒级返回，
+  // 未命中从必应搜图（0 元，无需 CogView），失败回退默认图
+  const alt = Math.max(0, Math.min(9, Number.parseInt(String(getQuery(event).alt ?? '0'), 10) || 0))
   if (!name) {
     setResponseStatus(event, 400)
     return
@@ -123,6 +128,43 @@ export default defineEventHandler(async (event) => {
   const slug = createHash('md5').update(name).digest('hex').slice(0, 16)
   const jpgFile = path.join(IMG_DIR, `${slug}.jpg`)
   const pngFile = path.join(IMG_DIR, `${slug}.png`)
+  const altFile = alt > 0 ? path.join(IMG_DIR, `${slug}-a${alt}.jpg`) : null
+
+  const sendJpeg = (buf: Buffer) => {
+    const etag = `"${createHash('md5').update(buf).digest('hex')}"`
+    setHeader(event, 'Cache-Control', 'no-cache')
+    setHeader(event, 'ETag', etag)
+    if (event.node.req.headers['if-none-match'] === etag) {
+      setResponseStatus(event, 304)
+      return
+    }
+    return send(event, buf, 'image/jpeg')
+  }
+
+  // alt 轮换：先查候选缓存
+  if (altFile) {
+    if (fs.existsSync(altFile)) return sendJpeg(fs.readFileSync(altFile))
+    // 未命中：必应现搜（0 元）；成功落盘下次秒回
+    if (!inflight.has(`${slug}-a${alt}`)) {
+      const p = fetchBingDishImage(name, alt - 1)
+        .then((buf) => {
+          if (buf) {
+            fs.mkdirSync(IMG_DIR, { recursive: true })
+            fs.writeFileSync(altFile, buf)
+          }
+          return buf
+        })
+        .catch(() => null)
+        .finally(() => inflight.delete(`${slug}-a${alt}`))
+      inflight.set(`${slug}-a${alt}`, p as Promise<Buffer | null>)
+    }
+    const altBuf = await inflight.get(`${slug}-a${alt}`)!
+    if (altBuf) return sendJpeg(altBuf)
+    // 必应失败：回退默认图（保证前端 200 有图）
+    if (fs.existsSync(jpgFile)) return sendJpeg(fs.readFileSync(jpgFile))
+    setResponseStatus(event, 404)
+    return
+  }
 
   // regen=1：跳过缓存读取直接重新生成（generate 内 writeFileSync 覆盖旧图，
   // 不做文件删除——删除类操作在受控环境下会被安全护栏拦截且失败时旧图还在，更稳）

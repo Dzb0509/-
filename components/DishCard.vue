@@ -18,8 +18,8 @@ const thumbOk = ref(true)
 const thumbLoaded = ref(false)
 const heroOk = ref(true)
 const heroLoaded = ref(false)
-/** 重新生成计数（换一张后 URL 加版本号防浏览器缓存） */
-const imgVer = ref(0)
+/** 「换一张」轮换计数（alt=N 从必应网络图候选轮换，URL 版本号防浏览器缓存） */
+const altIdx = ref(0)
 const regenerating = ref(false)
 
 /** 全局图片版本号：批量替换缓存图后递增，强制浏览器丢弃旧图缓存 */
@@ -27,27 +27,29 @@ const IMG_GLOBAL_VER = '20261030'
 
 const imgUrl = computed(
   () =>
-    `/api/dish-image?name=${encodeURIComponent(props.dish.name)}&v=${IMG_GLOBAL_VER}${imgVer.value ? `-${imgVer.value}` : ''}`
+    `/api/dish-image?name=${encodeURIComponent(props.dish.name)}&v=${IMG_GLOBAL_VER}${altIdx.value ? `&alt=${altIdx.value}` : ''}`
 )
 
-/** 图片与菜对不上时：调 regen=1 让服务端删缓存重生成，成功后刷新展示 */
+/** 换一张：优先走必应候选轮换（首次搜图约 3~8s，之后毫秒级）；失败回退 AI 重新生成 */
 function regenImage() {
   if (regenerating.value) return
   regenerating.value = true
   thumbOk.value = true
   thumbLoaded.value = false
+  const next = altIdx.value + 1
   const probe = new Image()
   probe.onload = () => {
     regenerating.value = false
-    imgVer.value++
+    altIdx.value = next
     thumbLoaded.value = true
-    ElMessage.success(`已重新生成「${props.dish.name}」的图片`)
+    ElMessage.success(`已换一张「${props.dish.name}」的图片`)
   }
   probe.onerror = () => {
     regenerating.value = false
-    ElMessage.warning('重新生成失败，稍后再试')
+    thumbLoaded.value = true
+    ElMessage.warning('没有找到更合适的图，稍后再试')
   }
-  probe.src = `/api/dish-image?name=${encodeURIComponent(props.dish.name)}&regen=1&t=${Date.now()}`
+  probe.src = `/api/dish-image?name=${encodeURIComponent(props.dish.name)}&alt=${next}&t=${Date.now()}`
 }
 
 const flavorColors: Record<string, string> = {
@@ -102,12 +104,12 @@ function eat() {
           @error="thumbOk = false"
         >
         <div v-if="!thumbOk" class="w-full h-full flex items-center justify-center text-2xl">🍽️</div>
-        <!-- 换一张：图片与菜对不上时重新生成 -->
+        <!-- 换一张：轮换必应网络图候选 -->
         <button
           v-if="thumbOk"
           class="absolute bottom-0.5 right-0.5 w-5 h-5 rounded bg-black/45 text-white text-[10px] leading-none flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-black/70 transition-opacity"
           :class="regenerating ? 'animate-spin opacity-100' : ''"
-          title="图片不对？重新生成"
+          title="换一张图"
           @click.stop="regenImage"
         >⟳</button>
       </div>
