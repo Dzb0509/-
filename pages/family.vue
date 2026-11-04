@@ -99,7 +99,14 @@ let reqSeq = 0
 const planKey = () =>
   `family|${diet.family.map((m) => `${m.id}:${m.age}:${m.population}:${m.custom?.summary ?? ''}`).join(',')}|r${diet.userRecipes.length}`
 
-async function fetchPlan(meals?: ('breakfast' | 'lunch' | 'dinner')[], opts?: { silent?: boolean }) {
+/** 当前已展示的全部菜名（换一桌时传给服务端排除，保证换出来的不与现有重复） */
+function shownNames(): string[] {
+  const p = plan.value
+  if (!p) return []
+  return [...p.meals.breakfast ?? [], ...p.meals.lunch ?? [], ...p.meals.dinner ?? []].map((d) => d.name)
+}
+
+async function fetchPlan(meals?: ('breakfast' | 'lunch' | 'dinner')[], opts?: { silent?: boolean; fast?: boolean }) {
   if (!diet.family.length) {
     ElMessage.warning('先添加至少一位家庭成员')
     return
@@ -117,7 +124,9 @@ async function fetchPlan(meals?: ('breakfast' | 'lunch' | 'dinner')[], opts?: { 
         meals: meals ?? ['breakfast', 'lunch', 'dinner'],
         yesterday: diet.yesterdayNames,
         taste: diet.tasteProfile,
-        customRecipes: diet.userRecipes
+        customRecipes: diet.userRecipes,
+        fast: opts?.fast || undefined,
+        excludeNames: opts?.fast ? shownNames() : undefined
       }
     })
     if (seq !== reqSeq) return // 已有更新的请求，丢弃本次过期结果
@@ -297,7 +306,7 @@ const mealKcal = (dishes?: Dish[]) => (dishes ?? []).reduce((s, d) => s + d.nutr
               <button
                 class="text-xs text-primary-600 hover:text-primary-700 font-medium"
                 :disabled="refreshing.includes(m.key)"
-                @click="fetchPlan([m.key])"
+                @click="fetchPlan([m.key], { fast: true })"
               >
                 {{ refreshing.includes(m.key) ? '换中…' : '换一桌 ⟳' }}
               </button>

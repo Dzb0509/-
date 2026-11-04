@@ -36,7 +36,14 @@ const planKey = () =>
 
 /** 请求序号：快速连点时只让最新一次请求的结果生效（防旧响应覆盖新响应） */
 let reqSeq = 0
-async function fetchPlan(meals?: ('breakfast' | 'lunch' | 'dinner')[], opts?: { silent?: boolean }) {
+/** 当前已展示的全部菜名（换一换时传给服务端排除，保证换出来的不与现有重复） */
+function shownNames(): string[] {
+  const p = plan.value
+  if (!p) return []
+  return [...p.meals.breakfast ?? [], ...p.meals.lunch ?? [], ...p.meals.dinner ?? []].map((d) => d.name)
+}
+
+async function fetchPlan(meals?: ('breakfast' | 'lunch' | 'dinner')[], opts?: { silent?: boolean; fast?: boolean }) {
   const seq = ++reqSeq
   if (meals?.length) refreshing.value = [...meals]
   else if (!opts?.silent) loading.value = true
@@ -51,7 +58,9 @@ async function fetchPlan(meals?: ('breakfast' | 'lunch' | 'dinner')[], opts?: { 
         taste: diet.tasteProfile,
         custom: diet.profile.custom
           ? { flavors: diet.profile.custom.flavors, needs: diet.profile.custom.needs, taboos: diet.profile.custom.taboos }
-          : undefined
+          : undefined,
+        fast: opts?.fast || undefined,
+        excludeNames: opts?.fast ? shownNames() : undefined
       }
     })
     if (seq !== reqSeq) return // 已有更新的请求，丢弃本次过期结果
@@ -241,7 +250,7 @@ onMounted(() => {
               <button
                 class="text-xs text-primary-600 hover:text-primary-700 font-medium"
                 :disabled="refreshing.includes(m.key)"
-                @click="fetchPlan([m.key])"
+                @click="fetchPlan([m.key], { fast: true })"
               >
                 {{ refreshing.includes(m.key) ? '换中…' : '换一换 ⟳' }}
               </button>

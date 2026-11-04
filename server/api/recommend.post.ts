@@ -25,6 +25,10 @@ interface Body {
   /** 用户上传的家传菜谱（参与全家推荐，优先入选） */
   customRecipes?: UserRecipe[]
   seed?: number
+  /** fast=true：「换一换」快速模式——跳过 GLM/联网搜索，本地规则引擎毫秒级换一批 */
+  fast?: boolean
+  /** fast 模式排除的菜名（当前已展示的菜，保证换出来的不重复） */
+  excludeNames?: string[]
 }
 
 /** 忌口过滤：菜名或食材命中忌口关键词则剔除 */
@@ -216,6 +220,28 @@ export default defineEventHandler(async (handler): Promise<RecommendResult> => {
       const userDishes: Dish[] = (body.customRecipes ?? [])
         .map(userRecipeToDish)
         .filter((d): d is Dish => !!d && !tabooHit(d, body.custom?.taboos))
+
+      // ---- fast 快速模式：「换一换」按钮专用，跳过 GLM/联网搜索，本地规则引擎毫秒级返回 ----
+      if (body.fast) {
+        const exclude = new Set<string>(
+          (body.excludeNames ?? [])
+            .map((n) => DISHES.find((d) => d.name === n)?.id)
+            .filter(Boolean) as string[]
+        )
+        const result: RecommendResult = {
+          source: 'rule',
+          reason: '本地规则引擎按人群营养与口味打分快速换一批，点「重新生成」可再获 AI 统筹结果',
+          meals: {}
+        }
+        for (const meal of meals) {
+          const picks = isFamily
+            ? familyRuleSet(meal, body, exclude, userDishes)
+            : rulePick(meal, body, exclude)
+          picks.forEach((p) => exclude.add(p.id))
+          result.meals[meal] = picks
+        }
+        return result
+      }
 
       const ruleResult: RecommendResult = { source: 'glm', reason: '', meals: {} }
       const usedIds = new Set<string>()

@@ -132,7 +132,7 @@ export interface UserRecipe {
 export type MealPlan = Partial<Record<'breakfast' | 'lunch' | 'dinner', Dish[]>>
 
 export interface RecommendResult {
-  source: 'glm' | 'mock'
+  source: 'glm' | 'mock' | 'rule'
   /** AI 推荐理由（结合昨日饮食与口味） */
   reason: string
   meals: MealPlan
