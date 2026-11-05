@@ -256,7 +256,7 @@ export default defineEventHandler(async (handler): Promise<RecommendResult> => {
         2
       ).catch(() => [] as string[])
 
-      const baseSys = `你是营养师。${isFamily ? '这是家庭模式：一桌菜要尽量同时满足所有成员的营养需求（例如有孕妇就保证叶酸与优质蛋白、有老人就软烂低盐、有孩子就营养密度高且不太辣），并兼顾大人的口味。' : '根据用户画像挑选合适的菜。'}`
+      const baseSys = `你是营养师。${isFamily ? '这是家庭模式：一桌菜要尽量同时满足所有成员的营养需求（例如有孕妇就保证叶酸与优质蛋白、有老人就软烂低盐、有孩子就营养密度高且不太辣），并兼顾大人的口味。推荐理由只能基于上方实际给定的家庭成员构成，严禁虚构未提及的成员或需求。' : '根据用户画像挑选合适的菜。'}`
       const MEAL_LABEL: Record<MealKey, string> = { breakfast: '早餐', lunch: '午餐', dinner: '晚餐' }
 
       let glmReason = ''

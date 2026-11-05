@@ -2,7 +2,7 @@
 /**
  * 个人档案：基本信息 + 人群定位 + 目标 → 每日营养目标自动计算 + 口味画像
  */
-import { POPULATIONS, type PopulationId } from '~/types/recommend'
+import { POPULATIONS, POP_GROUPS, type PopulationId } from '~/types/recommend'
 import { topEntries } from '~/types/taste'
 
 const diet = useDietStore()
@@ -62,22 +62,29 @@ function save() {
       </p>
     </section>
 
-    <!-- 人群定位（驱动每日推荐） -->
+    <!-- 人群定位（两级分组，驱动每日推荐） -->
     <section class="card">
       <h2 class="font-semibold mb-1">人群定位</h2>
       <p class="text-[11px] text-slate-400 mb-4">首页的每日三餐推荐将按你的人群自动调整能量与营养结构</p>
-      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <button
-          v-for="p in POPULATIONS"
-          :key="p.id"
-          class="rounded-xl border-2 p-3 text-left transition-all"
-          :class="form.population === p.id ? 'border-primary-400 bg-primary-50/50 ring-1 ring-primary-100' : 'border-slate-100 hover:border-primary-100'"
-          @click="setPopulation(p.id)"
-        >
-          <span class="text-lg">{{ p.emoji }}</span>
-          <p class="font-semibold text-sm">{{ p.label }}</p>
-          <p class="text-[11px] text-slate-400">{{ p.desc }}</p>
-        </button>
+      <div class="space-y-4">
+        <div v-for="g in POP_GROUPS" :key="g.id">
+          <p class="flex items-center gap-1.5 text-xs font-semibold text-slate-500 mb-2">
+            <span class="text-sm">{{ g.emoji }}</span>{{ g.label }}
+            <span class="font-normal text-slate-400">· {{ g.desc }}</span>
+          </p>
+          <div class="grid grid-cols-2 lg:grid-cols-4 gap-2">
+            <button
+              v-for="pid in g.options"
+              :key="pid"
+              class="rounded-xl border-2 p-2.5 text-left transition-all"
+              :class="form.population === pid ? 'border-primary-400 bg-primary-50/50 ring-1 ring-primary-100' : 'border-slate-100 hover:border-primary-100'"
+              @click="setPopulation(pid)"
+            >
+              <p class="font-semibold text-sm">{{ POPULATIONS.find((p) => p.id === pid)?.label }}</p>
+              <p class="text-[11px] text-slate-400">{{ POPULATIONS.find((p) => p.id === pid)?.desc }}</p>
+            </button>
+          </div>
+        </div>
       </div>
     </section>
 
