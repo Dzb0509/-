@@ -2,12 +2,14 @@
 /**
  * 上传卡片：点击/拖拽选择食物照片 → 压缩 → 调用识餐接口 → 进入结果页
  */
+import type { FoodItem } from '~/types/diet'
 const diet = useDietStore()
 const props = withDefaults(defineProps<{ compact?: boolean }>(), { compact: false })
 const fileInput = ref<HTMLInputElement>()
 const dragging = ref(false)
 const loading = ref(false)
 const preview = ref('')
+const foodHint = ref('')
 
 function pick() {
   if (!loading.value) fileInput.value?.click()
@@ -25,6 +27,7 @@ function onChange(e: Event) {
 }
 
 async function handleFile(file: File) {
+  if (loading.value) return
   if (!file.type.startsWith('image/')) {
     ElMessage.warning('请选择图片文件')
     return
@@ -32,16 +35,18 @@ async function handleFile(file: File) {
   loading.value = true
   try {
     preview.value = await compressImage(file)
-    const res = await $fetch<{ ok: boolean; foods: FoodItem[] }>('/api/vision', {
+    const res = await $fetch<{ ok: boolean; source: string; foods: FoodItem[] }>('/api/vision', {
       method: 'POST',
-      body: { image: preview.value }
+      body: { image: preview.value, regionHint: foodHint.value }
     })
+    if (!res.ok || res.source !== 'glm-4v' || !res.foods.length) throw new Error('没有真实识别结果')
     diet.startAnalysis(preview.value, res.foods)
     navigateTo('/analyze')
-  } catch {
-    ElMessage.error('识别失败，请重试')
+  } catch (error: any) {
+    ElMessage.error(error?.statusCode === 503 ? '识餐服务尚未配置，请稍后重试' : '识别未成功，请重试，不会保存示例数据')
   } finally {
     loading.value = false
+    if (fileInput.value) fileInput.value.value = ''
   }
 }
 </script>
@@ -56,6 +61,10 @@ async function handleFile(file: File) {
     @drop.prevent="onDrop"
   >
     <input ref="fileInput" type="file" accept="image/*" class="hidden" @change="onChange" />
+    <div class="px-5 pt-4" @click.stop>
+      <label class="text-xs text-slate-500">补充地域/风味线索（可选，不限分类）</label>
+      <el-input v-model="foodHint" class="mt-1" size="small" maxlength="80" placeholder="例如：西餐、日料、东北烧烤、甜点、饮品" />
+    </div>
     <div class="flex flex-col items-center justify-center gap-3 text-center" :class="props.compact ? 'py-6 px-4' : 'py-10 px-6'">
       <div
         class="bg-primary-50 flex items-center justify-center transition-transform group-hover:scale-105"

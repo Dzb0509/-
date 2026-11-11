@@ -26,13 +26,13 @@ const refreshing = ref<('breakfast' | 'lunch' | 'dinner')[]>([])
 
 /** 两级人群：当前展开的人群组（默认定位到 profile 所属组） */
 const activeGroup = ref(
-  POP_GROUPS.find((g) => g.options.includes(diet.profile.population))?.id ?? 'adult'
+  POP_GROUPS.find((g) => g.options.includes(diet.recommendationPopulation))?.id ?? 'adult'
 )
 const showCustom = ref(false)
 
 /** 当前请求条件的缓存 key（条件不变时直接展示上次结果，秒开） */
 const planKey = () =>
-  `${diet.profile.population}|${dayMode.value}|${diet.profile.custom?.summary ?? ''}|${diet.yesterdayNames.length}`
+  `${diet.syncVersion}|${diet.recommendationPopulation}|${dayMode.value}|${diet.profile.custom?.summary ?? ''}|${diet.yesterdayNames.length}`
 
 /** 请求序号：快速连点时只让最新一次请求的结果生效（防旧响应覆盖新响应） */
 let reqSeq = 0
@@ -51,7 +51,7 @@ async function fetchPlan(meals?: ('breakfast' | 'lunch' | 'dinner')[], opts?: { 
     const res = await $fetch<RecommendResult>('/api/recommend', {
       method: 'POST',
       body: {
-        population: diet.profile.population,
+        population: diet.recommendationPopulation,
         day: dayMode.value,
         meals: meals ?? ['breakfast', 'lunch', 'dinner'],
         yesterday: diet.yesterdayNames,
@@ -88,6 +88,12 @@ function queueFullRefresh() {
   fullTimer = setTimeout(() => fetchPlan(), 400)
 }
 
+// 吃了菜/确认识餐/跨标签同步后，立刻清掉旧餐单并静默重算，让新口味画像进入推荐。
+watch(() => diet.syncVersion, () => {
+  plan.value = null
+  queueFullRefresh()
+})
+
 function switchDay(mode: 'today' | 'tomorrow') {
   if (dayMode.value === mode) return
   dayMode.value = mode
@@ -95,8 +101,8 @@ function switchDay(mode: 'today' | 'tomorrow') {
 }
 
 function switchPop(pop: PopulationId) {
-  if (diet.profile.population === pop) return
-  diet.updateProfile({ population: pop })
+  if (diet.recommendationPopulation === pop) return
+  diet.setRecommendationPopulation(pop)
   queueFullRefresh()
 }
 
@@ -125,7 +131,7 @@ const greeting = computed(() => {
   return '晚上好'
 })
 
-const activePopInfo = computed(() => POP_MAP[diet.profile.population])
+const activePopInfo = computed(() => POP_MAP[diet.recommendationPopulation])
 
 onMounted(() => {
   const cached = diet.planCache[planKey()]
@@ -208,7 +214,7 @@ onMounted(() => {
             v-for="pid in POP_GROUPS.find((g) => g.id === activeGroup)!.options"
             :key="pid"
             class="!p-3 text-left rounded-md border-2 transition-all"
-            :class="diet.profile.population === pid ? 'bg-primary-50 !border-primary-400 ring-1 ring-primary-100' : 'bg-white !border-slate-100 hover:!border-primary-200'"
+            :class="diet.recommendationPopulation === pid ? 'bg-primary-50 !border-primary-400 ring-1 ring-primary-100' : 'bg-white !border-slate-100 hover:!border-primary-200'"
             @click="switchPop(pid)"
           >
             <span class="text-lg">{{ POP_MAP[pid].emoji }}</span>
@@ -330,7 +336,7 @@ onMounted(() => {
     <!-- AI 自定义弹窗 -->
     <CustomPrefDialog
       v-model:open="showCustom"
-      :population="diet.profile.population"
+      :population="diet.recommendationPopulation"
       :age="diet.profile.age"
       :existing="diet.profile.custom ?? null"
       @save="saveCustom"

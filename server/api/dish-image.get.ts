@@ -1,122 +1,19 @@
-import { defineEventHandler, getQuery, send, setResponseStatus, setHeader } from 'h3'
+import { defineEventHandler, getQuery, send, setResponseStatus, setHeader, createError } from 'h3'
 import { createHash } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import sharp from 'sharp'
-import { DISHES } from '../utils/dishes'
+const toJpeg = (buf: Buffer) => sharp(buf).resize(512, 512, { fit: 'cover' }).jpeg({ quality: 82 }).toBuffer()
 import { fetchBingDishImage } from '../utils/bingimg'
 
-/**
- * 菜品真实图片：按菜名用智谱 CogView-3-Flash（免费）生成真实感菜品照片。
- * 直接返回 JPEG 二进制，可作 <img src> 使用（DishCard / HeroCarousel）。
- * - 生成后经 sharp 压成 512px JPEG（体积 ~1/10，加载快）
- * - 首次生成后落盘 public/dish-imgs/{slug}.jpg，之后命中本地文件秒回
- * - ?regen=1 删除缓存强制重新生成（CogView AI 生成，慢且计费）
- * - ?alt=N 「换一张」轮换：必应网络图候选（0 元），命中本地缓存毫秒级返回
- * - 旧版 PNG 缓存读取时自动转 JPEG 并替换
- * - 并发去重：同名请求共享同一次生成的 Promise；失败返回 404，前端回退 emoji 占位
- */
+/** 本地缓存优先，免费网络候选受并发限制；公共读取不生成付费图片。 */
 const IMG_DIR = path.join(process.cwd(), 'public', 'dish-imgs')
 const inflight = new Map<string, Promise<Buffer | null>>()
 
-/** 生成并发闸：CogView 限流严格，同时最多 2 个生成任务（多余排队） */
-const GEN_LIMIT = 2
-let genActive = 0
-const genWaiters: (() => void)[] = []
-async function acquireGenSlot() {
-  if (genActive < GEN_LIMIT) {
-    genActive++
-    return
-  }
-  await new Promise<void>((resolve) => genWaiters.push(resolve))
-  genActive++
-}
-function releaseGenSlot() {
-  genActive--
-  genWaiters.shift()?.()
-}
-
-/** 从菜库查该菜的主料，拼进生成 prompt（图文更对得上） */
-function mainIngredients(name: string): string {
-  const dish = DISHES.find((d) => d.name === name)
-  if (!dish?.ingredients?.length) return ''
-  const majors = dish.ingredients
-    .filter((i) => i.startsWith('主料') || /肉|鱼|虾|蛋|豆腐|菜|瓜|菌|菇|鸡|牛|羊|米|面/.test(i))
-    .slice(0, 3)
-    .map((i) => i.replace(/^主料\s*/, ''))
-  return majors.length ? `主要食材：${majors.join('、')}，画面中必须出现这些食材` : ''
-}
-
-/**
- * 清洗菜名：剥掉「（少油）（改良）」等健康化修饰词。
- * CogView 对带括号修饰的怪菜名容易跑偏（生成人物/风景），
- * 核心菜名进主 prompt，修饰词转成风格短语。
- */
-function cleanDishName(name: string): { core: string; style: string } {
-  const quals = [...name.matchAll(/[（(]([^）)]*)[）)]/g)].map((m) => m[1]).filter(Boolean)
-  const core = name.replace(/[（(][^）)]*[）)]/g, '').trim() || name
-  return { core, style: quals.join('、') }
-}
-
-async function toJpeg(buf: Buffer): Promise<Buffer> {
-  return sharp(buf).resize(512, 512, { fit: 'cover' }).jpeg({ quality: 82 }).toBuffer()
-}
-
-async function generate(name: string, slug: string): Promise<Buffer | null> {
-  if (!process.env.ZHIPU_API_KEY) return null
-  // CogView-3-Flash 免费模型有 RPM 限流：429 时退避重试（最多 3 次）
-  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
-  const { core, style } = cleanDishName(name)
-  const ingredientHint = mainIngredients(name)
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    try {
-      const res = await fetch('https://open.bigmodel.cn/api/paas/v4/images/generations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.ZHIPU_API_KEY}` },
-        body: JSON.stringify({
-          // CogView-4 付费模型（~0.06元/张）：免费版 cogview-3-flash 会随机生成
-          // 人物/风景等无关图片（实测退化严重），换一张按钮也走此模型
-          model: 'cogview-4-250304',
-          prompt: `一盘做好的中国菜「${core}」的成品特写真实摄影${style ? `，${style}的健康做法版本` : ''}${ingredientHint ? `，${ingredientHint}` : ''}。画面里只有盛在白瓷盘中的这道菜的食物本体，食物占满画面中心 90%，45度俯拍，木质餐桌浅色背景，柔和自然光，色泽诱人。画面中绝对不能出现人物、人脸、文字、水印、建筑、风景或任何与这道菜无关的物体`,
-          size: '1024x1024'
-        }),
-        signal: AbortSignal.timeout(60000)
-      })
-      if (res.status === 429) {
-        // 区分「余额不足」（code 1113，重试无意义）与普通限流
-        let code = ''
-        try {
-          code = String(((await res.json()) as any)?.error?.code ?? '')
-        } catch { /* 忽略解析失败 */ }
-        if (code === '1113') {
-          console.error('[dish-image] 智谱账户余额不足（code 1113），请到 open.bigmodel.cn 充值后重试')
-          return null
-        }
-        console.warn(`[dish-image] ${name} 限流，第 ${attempt} 次退避重试...`)
-        await sleep(20000 * attempt + Math.random() * 5000)
-        continue
-      }
-      if (!res.ok) throw new Error(`上游 ${res.status}`)
-      const remote: string | undefined = ((await res.json()) as any)?.data?.[0]?.url
-      if (!remote) throw new Error('生成接口未返回图片URL')
-
-      const raw = Buffer.from(await (await fetch(remote, { signal: AbortSignal.timeout(30000) })).arrayBuffer())
-      const buf = await toJpeg(raw)
-      fs.mkdirSync(IMG_DIR, { recursive: true })
-      fs.writeFileSync(path.join(IMG_DIR, `${slug}.jpg`), buf)
-      return buf
-    } catch (err: any) {
-      console.error(`[dish-image] ${name} 生成失败:`, err?.message)
-      return null
-    }
-  }
-  console.error(`[dish-image] ${name} 重试 3 次仍限流，放弃`)
-  return null
-}
-
 export default defineEventHandler(async (event) => {
   const name = String(getQuery(event).name ?? '').trim().slice(0, 30)
-  const regen = getQuery(event).regen === '1'
+  if (getQuery(event).regen === '1') throw createError({ statusCode: 403, statusMessage: 'Image regeneration is not available via public API' })
+  const regen = false
   // alt=N（1~9）：「换一张」轮换——命中 {slug}-a{N}.jpg 缓存毫秒级返回，
   // 未命中从必应搜图（0 元，无需 CogView），失败回退默认图
   const alt = Math.max(0, Math.min(9, Number.parseInt(String(getQuery(event).alt ?? '0'), 10) || 0))
@@ -143,6 +40,7 @@ export default defineEventHandler(async (event) => {
 
   // alt 轮换：先查候选缓存
   if (altFile) {
+    if (inflight.size >= 4 && !inflight.has(`${slug}-a${alt}`)) throw createError({ statusCode: 429, statusMessage: 'Too many image requests' })
     if (fs.existsSync(altFile)) return sendJpeg(fs.readFileSync(altFile))
     // 未命中：必应现搜（0 元）；成功落盘下次秒回
     if (!inflight.has(`${slug}-a${alt}`)) {
@@ -199,22 +97,7 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  // 未命中：生成（同名并发去重 + 全局并发闸防限流风暴）
-  if (!inflight.has(slug)) {
-    const p = acquireGenSlot()
-      .then(() => generate(name, slug))
-      .finally(() => {
-        releaseGenSlot()
-        inflight.delete(slug)
-      })
-    inflight.set(slug, p)
-  }
-  const buf = await inflight.get(slug)!
-
-  if (!buf) {
-    setResponseStatus(event, 404)
-    return
-  }
-  setHeader(event, 'Cache-Control', 'public, max-age=86400')
-  return send(event, buf, 'image/jpeg')
+  // 公共读接口不触发计费生成；前端已有占位图。
+  setResponseStatus(event, 404)
+  return
 })

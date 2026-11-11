@@ -16,3 +16,6 @@ scripts/.qa-ok.json
 scripts/.webimg-*.json
 scripts/fix-mismatch-left.json
 scripts/qa-images-report.json
+.nuxt-fresh/
+.nuxt-production/
+.output-production/

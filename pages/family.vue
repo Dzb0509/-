@@ -175,6 +175,11 @@ function mealGroups(meal: 'breakfast' | 'lunch' | 'dinner', dishes?: Dish[]): Me
   return groups
 }
 const mealKcal = (dishes?: Dish[]) => (dishes ?? []).reduce((s, d) => s + d.nutrition.kcal, 0)
+
+// 饮食记录更新后，家庭页下次生成必须读取最新口味画像；避免继续展示旧套餐。
+watch(() => diet.syncVersion, () => {
+  plan.value = null
+})
 </script>
 
 <template>

@@ -27,6 +27,24 @@ export async function streamSSE(
   const reader = res.body.getReader()
   const decoder = new TextDecoder()
   let buf = ''
+  let sawDone = false
+  const dispatch = (payload: string) => {
+    if (payload === '[DONE]') {
+      if (!sawDone) {
+        sawDone = true
+        onEvent({ type: 'done' })
+      }
+      return true
+    }
+    try {
+      const event = JSON.parse(payload) as StreamEvent
+      if (event.type === 'done') sawDone = true
+      onEvent(event)
+    } catch {
+      // 忽略无法解析的片段
+    }
+    return false
+  }
   while (true) {
     const { done, value } = await reader.read()
     if (done) break
@@ -37,12 +55,9 @@ export async function streamSSE(
       const line = part.trim()
       if (!line.startsWith('data:')) continue
       const payload = line.slice(5).trim()
-      if (payload === '[DONE]') return
-      try {
-        onEvent(JSON.parse(payload))
-      } catch {
-        // 忽略无法解析的片段
-      }
+      if (dispatch(payload)) return
     }
   }
+  if (buf.trim().startsWith('data:')) dispatch(buf.trim().slice(5).trim())
+  if (!sawDone) onEvent({ type: 'done' })
 }

@@ -17,20 +17,46 @@ const input = ref('')
 const busy = ref(false)
 const listEl = ref<HTMLElement>()
 const diet = useDietStore()
+const chatStorageKey = computed(() => `shike-ai-chat-v1-${diet.activeUserId}`)
 
-// 首条欢迎语（含今日摄入摘要，展示 Agent 的上下文感知能力）
-onMounted(() => {
+function restoreChat() {
+  messages.value = []
+  try {
+    const saved = JSON.parse(localStorage.getItem(chatStorageKey.value) || '[]')
+    if (Array.isArray(saved)) messages.value = saved.filter((m) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.text === 'string').slice(-50)
+  } catch { /* 使用空对话 */ }
+}
+
+// 首条欢迎语（含当前用户的摄入摘要，展示 Agent 的上下文感知能力）
+function addWelcome() {
   const t = diet.todayTotals
   const g = diet.dailyGoals
   const summary =
     t.kcal > 0
       ? `我看了你的记录：今天已摄入约 ${Math.round(t.kcal)} kcal（目标 ${g.kcal} kcal），蛋白质 ${t.protein.toFixed(1)}/${g.protein}g。`
       : '今天还没有饮食记录，可以先去「饮食记录」页拍一张餐盘照片。'
-  messages.value.push({
+  if (!messages.value.length) messages.value.push({
     role: 'assistant',
     text: `你好，我是你的 AI 营养师 🥗 ${summary}\n可以问我：今天吃得怎么样？帮我排个全家食谱？蛋白质吃够了吗？`
   })
-})
+}
+
+onMounted(() => { restoreChat(); addWelcome() })
+watch(() => diet.activeUserId, () => { restoreChat(); addWelcome() })
+
+watch(messages, (value) => {
+  if (!import.meta.client) return
+  try {
+    localStorage.setItem(chatStorageKey.value, JSON.stringify(value.filter((m) => !m.streaming).slice(-50)))
+  } catch { /* 存储空间不足不影响当前对话 */ }
+}, { deep: true })
+
+function clearChat() {
+  messages.value = []
+  localStorage.removeItem(chatStorageKey.value)
+  const t = diet.todayTotals
+  messages.value.push({ role: 'assistant', text: t.kcal > 0 ? `已清空对话。今天已记录约 ${Math.round(t.kcal)} kcal，可以继续问我饮食问题。` : '已清空对话，可以重新开始咨询。' })
+}
 
 const suggestions = ['帮我评估今天的饮食', '帮我排一份减脂食谱', '家有老人孩子怎么吃？']
 
@@ -80,7 +106,10 @@ async function send(text?: string) {
 <template>
   <div class="flex flex-col h-full min-h-0" :class="props.compact ? '' : 'max-w-3xl mx-auto'">
     <header v-if="!props.compact" class="pb-4">
-      <h1 class="text-xl font-bold">🧑‍⚕️ AI 营养师</h1>
+      <div class="flex items-center justify-between gap-3">
+        <h1 class="text-xl font-bold">🧑‍⚕️ AI 营养师</h1>
+        <button class="text-xs text-slate-400 hover:text-red-500" @click="clearChat">清空对话</button>
+      </div>
       <p class="text-xs text-slate-400 mt-0.5">可解释 Agent：每个回答前你可以看到它查证了什么</p>
     </header>
     <p v-else class="text-[11px] text-slate-400 pb-2">可解释 Agent：回答前你能看到它查证了什么</p>

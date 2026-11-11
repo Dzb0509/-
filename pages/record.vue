@@ -3,7 +3,7 @@
  * 饮食记录：拍照识餐（辅助）+ 今日/昨日记录列表
  * 记录会自动更新口味画像，并作为「根据昨天推荐今天」的上下文
  */
-import { MEAL_LABELS, sumNutrition } from '~/types/diet'
+import { MEAL_LABELS, sumNutrition, foodNutrition } from '~/types/diet'
 
 const diet = useDietStore()
 
@@ -14,6 +14,10 @@ function del(id: string) {
 
 function kcal(r: (typeof diet.records)[number]) {
   return Math.round(sumNutrition(r.foods).kcal)
+}
+
+function foodKcal(food: (typeof diet.records)[number]['foods'][number]) {
+  return Math.round(foodNutrition(food).kcal)
 }
 </script>
 
@@ -33,15 +37,23 @@ function kcal(r: (typeof diet.records)[number]) {
         <section class="space-y-3">
           <h2 class="font-semibold px-1">今天（{{ diet.todayRecords.length }}）</h2>
           <div v-for="r in diet.todayRecords" :key="r.id" class="card !p-4">
-            <div class="flex items-center justify-between mb-2">
+            <div class="flex items-start justify-between gap-3">
               <span class="chip bg-primary-50 text-primary-700">{{ MEAL_LABELS[r.meal] }}</span>
-              <div class="flex items-center gap-3">
-                <span class="text-xs text-slate-400 tabular-nums">≈ {{ kcal(r) }} kcal</span>
-                <button class="text-xs text-slate-300 hover:text-red-400 transition-colors" @click="del(r.id)">删除</button>
+              <button class="shrink-0 text-xs text-slate-300 hover:text-red-400 transition-colors" @click="del(r.id)">删除</button>
+            </div>
+            <div class="grid gap-2 mt-3">
+              <div v-for="f in r.foods" :key="f.id" class="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2.5 min-w-0">
+                <div class="min-w-0">
+                  <p class="font-medium truncate">{{ f.name }}</p>
+                  <p class="text-[11px] text-slate-400 truncate">{{ f.region || '未标注' }} · {{ f.grams }}g</p>
+                </div>
+                <span class="shrink-0 text-xs text-slate-500 tabular-nums">≈ {{ foodKcal(f) }} kcal</span>
               </div>
             </div>
-            <div class="flex flex-wrap gap-2">
-              <span v-for="f in r.foods" :key="f.id" class="chip bg-slate-100 text-slate-600">{{ f.name }}</span>
+            <div class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-400 border-t border-slate-100 pt-2">
+              <span>本餐 ≈ {{ kcal(r) }} kcal</span>
+              <span>蛋白质 {{ sumNutrition(r.foods).protein.toFixed(1) }}g</span>
+              <span>碳水 {{ sumNutrition(r.foods).carb.toFixed(1) }}g</span>
             </div>
           </div>
           <p v-if="!diet.todayRecords.length" class="card text-center text-sm text-slate-400 !py-8">
@@ -56,12 +68,18 @@ function kcal(r: (typeof diet.records)[number]) {
             <span class="text-xs font-normal text-slate-400 ml-1">首页的今日推荐会避开这些菜</span>
           </h2>
           <div v-for="r in diet.yesterdayRecords" :key="r.id" class="card !p-4 opacity-80">
-            <div class="flex items-center gap-3 mb-2">
+            <div class="flex items-start justify-between gap-3">
               <span class="chip bg-slate-100 text-slate-500">{{ MEAL_LABELS[r.meal] }}</span>
               <span class="text-xs text-slate-400 tabular-nums">≈ {{ kcal(r) }} kcal</span>
             </div>
-            <div class="flex flex-wrap gap-2">
-              <span v-for="f in r.foods" :key="f.id" class="chip bg-slate-100 text-slate-500">{{ f.name }}</span>
+            <div class="grid gap-2 mt-3">
+              <div v-for="f in r.foods" :key="f.id" class="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2.5 min-w-0">
+                <div class="min-w-0">
+                  <p class="font-medium truncate">{{ f.name }}</p>
+                  <p class="text-[11px] text-slate-400 truncate">{{ f.region || '未标注' }} · {{ f.grams }}g</p>
+                </div>
+                <span class="shrink-0 text-xs text-slate-500 tabular-nums">≈ {{ foodKcal(f) }} kcal</span>
+              </div>
             </div>
           </div>
         </section>

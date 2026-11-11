@@ -1,11 +1,11 @@
 /**
- * 图片压缩：限制最大边长并转 JPEG dataURL
+ * 图片压缩：保留更多细节并转 JPEG dataURL
  * 用于识餐上传前压图，控制视觉模型 token 消耗
  */
 export async function compressImage(
   file: File,
-  maxSide = 1024,
-  quality = 0.8
+  maxSide = 1536,
+  quality = 0.9
 ): Promise<string> {
   const bitmap = await createImageBitmap(file)
   const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height))

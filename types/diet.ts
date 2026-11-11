@@ -14,6 +14,8 @@ export interface FoodItem {
   grams: number
   /** 识别置信度 0-1 */
   confidence: number
+  /** AI 识别的菜系，用户可在确认页修正 */
+  region?: string
   /** 每 100g 的营养含量（来自食物成分表/RAG 检索校准） */
   per100: Nutrition
 }

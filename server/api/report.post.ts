@@ -19,6 +19,7 @@ interface ReportBody {
   avgKcal?: number
   goalRate?: number
   taste?: string[]
+  tasteRegions?: string[]
   topDishes?: string[]
 }
 
@@ -42,7 +43,10 @@ export default defineEventHandler(async (event) => {
     }
     const trend = diff <= -5 ? `平均每日约 ${avg} 千卡，低于目标 ${Math.abs(diff)}%，呈温和热量缺口` : diff >= 5 ? `平均每日约 ${avg} 千卡，超出目标 ${diff}%，建议适当控制主食与油量` : `平均每日约 ${avg} 千卡，与目标基本持平，热量控制得不错`
     const dishLine = body.topDishes?.length ? `本周常吃：${body.topDishes.slice(0, 5).join('、')}。` : ''
-    const tasteLine = body.taste?.length ? `口味画像显示你偏好${body.taste.slice(0, 3).join('、')}。` : ''
+    const tasteLine = [
+      body.taste?.length ? `口味画像显示你偏好${body.taste.slice(0, 3).join('、')}` : '',
+      body.tasteRegions?.length ? `常吃地域/风味为${body.tasteRegions.slice(0, 3).join('、')}` : ''
+    ].filter(Boolean).join('，')
     const goalLine = goals ? `按目标（${goals.kcal} kcal/日）与「${body.goal === 'lose' ? '减脂' : body.goal === 'gain' ? '增肌' : '保持'}」方向，${recorded.length >= 3 ? '继续保持记录习惯，推荐页的餐单会随画像持续个性化' : '多记录几餐可以让 AI 推荐更精准'}。` : ''
     return `本周共记录 ${recorded.length} 天饮食，${trend}。${dishLine}${tasteLine}${goalLine}下周建议：① 主食粗细搭配，一半替换为全谷物；② 保证每日蛋白质与蔬菜摄入；③ 晚餐清淡少油。（本报告由 AI 基于你的记录生成，仅供参考，不构成医疗建议。）`
   }
@@ -77,7 +81,7 @@ export default defineEventHandler(async (event) => {
 ${daysText}
 统计：有记录 ${recorded.length} 天，日均 ${avg || '—'} kcal（相对目标 ${diff >= 0 ? '+' : ''}${diff}%），目标达成率 ${body.goalRate ?? 0}%
 ${body.topDishes?.length ? `本周常吃菜品：${body.topDishes.join('、')}` : ''}
-${body.taste?.length ? `口味画像：偏好${body.taste.join('、')}` : '口味画像暂无数据'}`
+${body.taste?.length || body.tasteRegions?.length ? `口味画像：${body.taste?.length ? `偏好${body.taste.join('、')}` : ''}${body.tasteRegions?.length ? `；常吃地域/风味${body.tasteRegions.join('、')}` : ''}` : '口味画像暂无数据'}`
       }
     ])
 

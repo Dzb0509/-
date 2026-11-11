@@ -5,6 +5,7 @@
 const diet = useDietStore()
 
 import { sumNutrition } from '~/types/diet'
+import { learnTaste, emptyTaste, topEntries } from '~/types/taste'
 import { POP_MAP } from '~/types/recommend'
 
 // 近 7 天日期标签
@@ -14,6 +15,12 @@ const days = Array.from({ length: 7 }, (_, i) => {
   return d
 })
 const dayLabels = days.map((d) => `${d.getMonth() + 1}/${d.getDate()}`)
+
+const weekRecords = computed(() => {
+  const start = new Date(days[0]); start.setHours(0, 0, 0, 0)
+  const end = new Date(days[6]); end.setHours(24, 0, 0, 0)
+  return diet.records.filter(r => r.time >= start.getTime() && r.time < end.getTime())
+})
 
 /** 某天的记录 foods（仅真实数据，无记录为 null，图表断开显示） */
 function foodsOfDay(d: Date) {
@@ -53,12 +60,21 @@ const dayMeals = computed(() =>
 /** 本周饮食画像：常吃菜品 Top5 */
 const topDishes = computed(() => {
   const counter = new Map<string, number>()
-  for (const r of diet.records.slice(0, 40)) {
+  for (const r of weekRecords.value) {
     for (const f of r.foods) counter.set(f.name, (counter.get(f.name) ?? 0) + 1)
   }
   return [...counter.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([name]) => name)
 })
-const tasteTags = computed(() => topEntries(diet.tasteProfile.flavors as Record<string, number>, 4))
+const tasteTags = computed(() => {
+  let taste = emptyTaste()
+  for (const r of weekRecords.value) taste = learnTaste(taste, r.foods.map(f => `${f.name}${f.region ? ` 菜系:${f.region}` : ''}`))
+  return topEntries(taste.flavors as Record<string, number>, 4)
+})
+const regionTags = computed(() => {
+  let taste = emptyTaste()
+  for (const r of weekRecords.value) taste = learnTaste(taste, r.foods.map(f => `${f.name}${f.region ? ` 菜系:${f.region}` : ''}`))
+  return topEntries(taste.regions, 4)
+})
 
 const kcalOption = computed(() => ({
   tooltip: {
@@ -100,6 +116,8 @@ const kcalOption = computed(() => ({
 // AI 周报流式总结（GLM 真流式 + 真实数据上下文；无 Key 降级规则文案）
 const reportText = ref('')
 const generating = ref(false)
+const reportInputKey = computed(() => diet.records.map(r => `${r.id}:${r.time}:${r.foods.map(f => `${f.name}:${f.region ?? ''}:${f.grams}`).join(',')}`).join('|'))
+let reportRefreshTimer: ReturnType<typeof setTimeout> | null = null
 async function generate() {
   generating.value = true
   reportText.value = ''
@@ -113,6 +131,7 @@ async function generate() {
       avgKcal: avgKcal.value,
       goalRate: goalRate.value,
       taste: tasteTags.value,
+      tasteRegions: regionTags.value,
       topDishes: topDishes.value
     }, (e) => {
       if (e.type === 'text') reportText.value += e.text ?? ''
@@ -124,6 +143,11 @@ async function generate() {
   }
 }
 onMounted(generate)
+watch(reportInputKey, () => {
+  if (reportRefreshTimer) clearTimeout(reportRefreshTimer)
+  reportRefreshTimer = setTimeout(() => generate(), 180)
+})
+onUnmounted(() => { if (reportRefreshTimer) clearTimeout(reportRefreshTimer) })
 </script>
 
 <template>
@@ -144,7 +168,7 @@ onMounted(generate)
     <section class="grid grid-cols-3 gap-3">
       <div class="card !p-4 text-center">
         <p class="text-xs text-slate-400">记录餐数</p>
-        <p class="text-2xl font-bold mt-1 tabular-nums">{{ diet.records.length }}</p>
+        <p class="text-2xl font-bold mt-1 tabular-nums">{{ weekRecords.length }}</p>
       </div>
       <div class="card !p-4 text-center">
         <p class="text-xs text-slate-400">日均热量</p>
@@ -159,7 +183,7 @@ onMounted(generate)
     </section>
 
     <!-- 本周饮食画像 -->
-    <section v-if="topDishes.length || tasteTags.length" class="card">
+    <section v-if="topDishes.length || tasteTags.length || regionTags.length" class="card">
       <h2 class="font-semibold mb-3">本周饮食画像</h2>
       <div class="space-y-3">
         <div v-if="topDishes.length">
@@ -172,6 +196,12 @@ onMounted(generate)
           <p class="text-xs font-semibold text-slate-500 mb-1.5">口味偏好（AI 从记录中学习）</p>
           <div class="flex flex-wrap gap-1.5">
             <span v-for="t in tasteTags" :key="t" class="chip bg-amber-50 text-amber-600">{{ t }}</span>
+          </div>
+        </div>
+        <div v-if="regionTags.length">
+          <p class="text-xs font-semibold text-slate-500 mb-1.5">常吃地域/风味</p>
+          <div class="flex flex-wrap gap-1.5">
+            <span v-for="t in regionTags" :key="t" class="chip bg-sky-50 text-sky-600">{{ t }}</span>
           </div>
         </div>
         <p class="text-[11px] text-slate-400">画像会反哺首页推荐：常吃的、爱吃的会被优先考虑，同时自动避开重复</p>

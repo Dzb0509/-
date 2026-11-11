@@ -16,6 +16,12 @@ const DEFAULT_PROFILE: UserProfile = {
   population: 'balance' as PopulationId
 }
 
+export interface DietUser {
+  id: string
+  profile: UserProfile
+  records: FoodRecord[]
+}
+
 function loadPersisted() {
   if (!import.meta.client) return null
   try {
@@ -29,9 +35,19 @@ function loadPersisted() {
 export const useDietStore = defineStore('diet', {
   state: () => {
     const persisted = loadPersisted()
+    const migratedUsers = (persisted?.users as DietUser[] | undefined)?.length
+      ? persisted.users
+      : [{ id: 'u-default', profile: (persisted?.profile ?? { ...DEFAULT_PROFILE }) as UserProfile, records: (persisted?.records ?? []) as FoodRecord[] }]
+    const activeUser = migratedUsers.find((u) => u.id === (persisted?.activeUserId ?? 'u-default')) ?? migratedUsers[0]
     return {
-      records: (persisted?.records ?? []) as FoodRecord[],
-      profile: (persisted?.profile ?? { ...DEFAULT_PROFILE }) as UserProfile,
+      storageError: '',
+      syncVersion: 0,
+      lastSyncedAt: 0,
+      users: migratedUsers as DietUser[],
+      activeUserId: activeUser.id,
+      recommendationPopulation: (persisted?.recommendationPopulation ?? activeUser.profile.population) as PopulationId,
+      records: activeUser.records as FoodRecord[],
+      profile: activeUser.profile as UserProfile,
       /** 家庭成员（家庭模式） */
       family: (persisted?.family ?? [
         { id: 'm1', label: '爸爸', age: 40, population: 'balance' },
@@ -44,7 +60,7 @@ export const useDietStore = defineStore('diet', {
       /** 用户上传的家传菜谱（参与全家推荐） */
       userRecipes: (persisted?.userRecipes ?? []) as UserRecipe[],
       /** 推荐结果缓存（按请求条件做 key）：进页面先展示上次结果再后台刷新，免骨架屏等待 */
-      planCache: (persisted?.planCache ?? {}) as Record<string, RecommendResult>
+      planCache: (persisted?.recommendationCacheVersion === 2 ? persisted.planCache ?? {} : {}) as Record<string, RecommendResult>
     }
   },
 
@@ -89,12 +105,75 @@ export const useDietStore = defineStore('diet', {
     /** 口味画像：从全部历史记录自动学习（越记越准） */
     tasteProfile(state): TasteProfile {
       let t = emptyTaste()
-      for (const r of state.records) t = learnTaste(t, r.foods.map((f) => f.name))
+      for (const r of state.records) t = learnTaste(t, r.foods.map((f) => `${f.name}${f.region ? ` 菜系:${f.region}` : ''}`))
       return t
     }
   },
 
   actions: {
+    syncActiveUser() {
+      const user = this.users.find((u) => u.id === this.activeUserId)
+      if (user) {
+        user.profile = this.profile
+        user.records = this.records
+      }
+    },
+    switchUser(id: string) {
+      if (id === this.activeUserId) return
+      this.syncActiveUser()
+      const user = this.users.find((u) => u.id === id)
+      if (!user) return
+      this.activeUserId = user.id
+      this.profile = user.profile
+      this.records = user.records
+      this.recommendationPopulation = user.profile.population
+      this.pending = null
+      this.planCache = {}
+      this.invalidateRecommendations()
+      this.persist()
+    },
+    addUser(nickname: string) {
+      const name = nickname.trim().slice(0, 12)
+      if (!name) return
+      this.syncActiveUser()
+      const id = `u-${Date.now()}`
+      const profile = { ...DEFAULT_PROFILE, nickname: name }
+      this.users.push({ id, profile, records: [] })
+      this.activeUserId = id
+      this.profile = profile
+      this.records = []
+      this.recommendationPopulation = profile.population
+      this.pending = null
+      this.planCache = {}
+      this.invalidateRecommendations()
+      this.persist()
+    },
+    setRecommendationPopulation(population: PopulationId) {
+      if (this.recommendationPopulation === population) return
+      this.recommendationPopulation = population
+      this.invalidateRecommendations()
+      this.persist()
+    },
+    invalidateRecommendations() {
+      this.planCache = {}
+      this.syncVersion++
+    },
+    syncFromStorage() {
+      const persisted = loadPersisted()
+      if (!persisted) return
+      const users = (persisted.users as DietUser[] | undefined) ?? [{ id: 'u-default', profile: persisted.profile ?? this.profile, records: persisted.records ?? [] }]
+      this.users = users
+      this.activeUserId = persisted.activeUserId ?? users[0].id
+      const active = users.find((u) => u.id === this.activeUserId) ?? users[0]
+      this.profile = active.profile
+      this.records = active.records
+      this.recommendationPopulation = persisted.recommendationPopulation ?? active.profile.population
+      this.family = (persisted.family ?? this.family) as FamilyMember[]
+      this.userRecipes = (persisted.userRecipes ?? this.userRecipes) as UserRecipe[]
+      this.planCache = {}
+      this.syncVersion++
+      this.lastSyncedAt = Date.now()
+    },
     startAnalysis(image: string, foods: FoodItem[]) {
       this.pending = { image, foods }
     },
@@ -108,37 +187,48 @@ export const useDietStore = defineStore('diet', {
         foods: this.pending.foods
       }
       this.records.unshift(record)
+      this.invalidateRecommendations()
+      if (!this.persist()) {
+        this.records.shift()
+        return null
+      }
       this.pending = null
-      this.persist()
       return record
     },
     removeRecord(id: string) {
       this.records = this.records.filter((r) => r.id !== id)
+      this.invalidateRecommendations()
       this.persist()
     },
     updateProfile(profile: Partial<UserProfile>) {
       this.profile = { ...this.profile, ...profile }
+      this.invalidateRecommendations()
       this.persist()
     },
     addFamilyMember(m: Omit<FamilyMember, 'id'>) {
       this.family.push({ ...m, id: `m-${Date.now()}` })
+      this.invalidateRecommendations()
       this.persist()
     },
     removeFamilyMember(id: string) {
       this.family = this.family.filter((m) => m.id !== id)
+      this.invalidateRecommendations()
       this.persist()
     },
     updateFamilyMember(id: string, patch: Partial<FamilyMember>) {
       const m = this.family.find((x) => x.id === id)
       if (m) Object.assign(m, patch)
+      this.invalidateRecommendations()
       this.persist()
     },
     addUserRecipe(r: Omit<UserRecipe, 'id'>) {
       this.userRecipes.push({ ...r, id: `ur-${Date.now()}` })
+      this.invalidateRecommendations()
       this.persist()
     },
     removeUserRecipe(id: string) {
       this.userRecipes = this.userRecipes.filter((r) => r.id !== id)
+      this.invalidateRecommendations()
       this.persist()
     },
     /** 缓存推荐结果（key = 请求条件摘要，如 population|day|custom） */
@@ -156,6 +246,7 @@ export const useDietStore = defineStore('diet', {
         name: dish.name,
         grams: 100,
         confidence: 1,
+        region: dish.region,
         // 菜品营养为单人份总量：借 grams=100 + per100 使 foodNutrition() 恰好还原
         per100: { ...dish.nutrition }
       }
@@ -166,15 +257,32 @@ export const useDietStore = defineStore('diet', {
         foods: [item]
       }
       this.records.unshift(record)
-      this.persist()
+      this.invalidateRecommendations()
+      if (!this.persist()) this.records.shift()
     },
     persist() {
       if (!import.meta.client) return
-      // 骨架阶段使用 localStorage；正式版计划升级为 IndexedDB（接口保持一致）
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({ records: this.records, profile: this.profile, family: this.family, userRecipes: this.userRecipes, planCache: this.planCache })
-      )
+      // 照片仅用于本次识别，持久化营养与菜品元数据，避免 base64 撑满配额。
+      this.syncActiveUser()
+      const users = this.users.map((user) => ({ ...user, records: user.records.map(({ image, ...record }) => record) }))
+      const data = { recommendationCacheVersion: 2, users, activeUserId: this.activeUserId, recommendationPopulation: this.recommendationPopulation, records: this.records.map(({ image, ...record }) => record), profile: this.profile, family: this.family, userRecipes: this.userRecipes, planCache: this.planCache }
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+        this.storageError = ''
+        this.lastSyncedAt = Date.now()
+        return true
+      } catch {
+        // 推荐缓存可重建，优先保全用户记录。
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...data, planCache: {} }))
+          this.planCache = {}
+          this.storageError = ''
+          return true
+        } catch {
+          this.storageError = '本地保存失败，请释放浏览器存储空间后重试；刷新前请保留当前页面。'
+          return false
+        }
+      }
     }
   }
 })

@@ -1,9 +1,11 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
+  buildDir: '.nuxt-fresh',
   compatibilityDate: '2026-10-27',
   // 纯 SPA 模式：营养分析工具重交互轻 SEO，关闭 SSR 简化部署
   ssr: false,
   devtools: { enabled: false },
+  vite: { optimizeDeps: { exclude: ['lodash-es', 'echarts', 'vue-echarts'] } },
   modules: ['@nuxtjs/tailwindcss', '@pinia/nuxt', '@element-plus/nuxt'],
   css: ['~/assets/css/main.css'],
   app: {

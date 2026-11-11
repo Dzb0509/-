@@ -1,4 +1,5 @@
 <script setup lang="ts">
+const diet = useDietStore()
 const navItems = [
   { to: '/', label: '今日推荐', icon: 'plate' },
   { to: '/family', label: '家庭食谱', icon: 'family' },
@@ -12,6 +13,7 @@ const navItems = [
 
 <template>
   <div class="flex min-h-screen">
+    <div v-if="diet.storageError" role="alert" class="fixed top-0 inset-x-0 z-50 bg-red-50 text-red-700 p-3 text-center">{{ diet.storageError }} <button class="underline" @click="diet.persist()">重试保存</button></div>
     <!-- 桌面侧边栏 -->
     <aside class="hidden md:flex flex-col w-60 shrink-0 border-r border-slate-100 bg-white px-4 py-6 sticky top-0 h-screen overflow-y-auto">
       <NuxtLink to="/" class="flex items-center gap-2.5 px-2 mb-8">

@@ -34,7 +34,7 @@ export default defineEventHandler(async (event) => {
   }
 
   // RAG：先检索再生成
-  const query = `一餐包含${foods.map((f) => f.name).join('、') || '未知食物'}，总热量约${kcal}千卡，蛋白质${(totals?.protein ?? 0).toFixed(1)}g，给出营养点评与改善建议`
+  const query = `一餐包含${foods.map((f) => `${f.name}${f.region ? `（${f.region}）` : ''}`).join('、') || '未知食物'}，总热量约${kcal}千卡，蛋白质${(totals?.protein ?? 0).toFixed(1)}g，给出营养点评与改善建议`
   let passages: string[] = []
   try {
     passages = await retrieve(query, 4)
@@ -58,7 +58,7 @@ ${passages.map((p, i) => `${i + 1}. ${p}`).join('\n') || '（无）'}`
       { role: 'system', content: system },
       {
         role: 'user',
-        content: `我这一餐吃了：${foods.map((f) => `${f.name}约${f.grams}g`).join('、') || '（未提供）'}，估算总热量${kcal}千卡。请点评。`
+        content: `我这一餐吃了：${foods.map((f) => `${f.name}${f.region ? `（${f.region}）` : ''}约${f.grams}g`).join('、') || '（未提供）'}，估算总热量${kcal}千卡。请点评。`
       }
     ])
     if (!upstream.ok) throw new Error(`上游 ${upstream.status}`)

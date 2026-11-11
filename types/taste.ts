@@ -70,6 +70,10 @@ export function learnTaste(profile: TasteProfile, names: string[]): TasteProfile
       const hit = countMatch(text, words)
       if (hit > 0) next.regions[region] = (next.regions[region] ?? 0) + hit
     }
+    const explicitRegion = text.match(/(?:菜系|region)[:：\s]*([^，,；;|]+)/i)?.[1]?.trim()
+    if (explicitRegion && explicitRegion.length <= 20 && explicitRegion !== '未知') {
+      next.regions[explicitRegion] = (next.regions[explicitRegion] ?? 0) + 2
+    }
     for (const ing of INGREDIENT_RULES) {
       if (text.includes(ing)) next.ingredients[ing] = (next.ingredients[ing] ?? 0) + 1
     }

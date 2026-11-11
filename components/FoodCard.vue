@@ -2,6 +2,7 @@
 /**
  * 食物卡片：展示识别结果，支持修正克重（低置信度高亮提示）
  */
+import type { FoodItem } from '~/types/diet'
 const props = defineProps<{ food: FoodItem; editable?: boolean }>()
 const emit = defineEmits<{ remove: [] }>()
 
@@ -37,6 +38,18 @@ function onGramsChange(val: number | undefined) {
         {{ Math.round(nutrition.kcal) }} kcal · 蛋白 {{ nutrition.protein.toFixed(1) }}g · 脂肪
         {{ nutrition.fat.toFixed(1) }}g · 碳水 {{ nutrition.carb.toFixed(1) }}g
       </p>
+      <div class="mt-2 flex items-center gap-2">
+        <span class="text-[11px] text-slate-400">地域/风味</span>
+        <el-input
+          v-if="editable"
+          v-model="food.region"
+          maxlength="20"
+          size="small"
+          class="!w-32"
+          placeholder="如：炭火烧烤"
+        />
+        <span v-else class="chip bg-slate-100 text-slate-500">{{ food.region || '未标注' }}</span>
+      </div>
     </div>
     <div v-if="editable" class="shrink-0 flex items-center gap-2">
       <el-input-number

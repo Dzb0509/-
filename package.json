@@ -9,7 +9,8 @@
     "generate": "nuxt generate",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
-    "start": "node start-prod.mjs"
+    "start": "node start-prod.mjs",
+    "test": "node tests/regression.mjs"
   },
   "dependencies": {
     "@element-plus/nuxt": "^1.1.4",

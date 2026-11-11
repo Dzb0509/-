@@ -7,6 +7,7 @@ import { topEntries } from '~/types/taste'
 
 const diet = useDietStore()
 const form = reactive({ ...diet.profile })
+const newUserName = ref('')
 
 const goalOptions = [
   { value: 'lose', label: '减脂' },
@@ -17,8 +18,19 @@ const goalOptions = [
 function setPopulation(pop: PopulationId) {
   form.population = pop
   diet.updateProfile({ population: pop })
-  ElMessage.success('人群已切换，今日推荐将按此重新生成')
+  ElMessage.success('已保存当前用户的人群档案；首页推荐人群可单独选择')
 }
+
+function addUser() {
+  const name = newUserName.value.trim()
+  if (!name) return ElMessage.warning('请输入用户昵称')
+  diet.addUser(name)
+  Object.assign(form, diet.profile)
+  newUserName.value = ''
+  ElMessage.success(`已切换到${diet.profile.nickname}`)
+}
+
+watch(() => diet.activeUserId, () => Object.assign(form, diet.profile))
 
 const taste = computed(() => ({
   flavors: topEntries(diet.tasteProfile.flavors as Record<string, number>, 6),
@@ -38,6 +50,22 @@ function save() {
       <h1 class="text-2xl font-bold">👤 我的档案</h1>
       <p class="text-sm text-slate-400 mt-1">完善信息后，AI 会据此计算你的每日营养目标</p>
     </header>
+
+    <section class="card">
+      <div class="flex items-center justify-between gap-3 mb-3">
+        <div>
+          <h2 class="font-semibold">当前用户</h2>
+          <p class="text-[11px] text-slate-400">每个用户的饮食记录、口味画像和周报相互独立</p>
+        </div>
+        <el-select :model-value="diet.activeUserId" class="!w-36" @change="(id: string) => diet.switchUser(id)">
+          <el-option v-for="user in diet.users" :key="user.id" :label="user.profile.nickname" :value="user.id" />
+        </el-select>
+      </div>
+      <div class="flex gap-2">
+        <el-input v-model="newUserName" maxlength="12" placeholder="添加用户昵称" @keyup.enter="addUser" />
+        <button class="btn-secondary shrink-0" @click="addUser">添加用户</button>
+      </div>
+    </section>
 
     <!-- 目标概览 -->
     <section class="card">
@@ -65,7 +93,7 @@ function save() {
     <!-- 人群定位（两级分组，驱动每日推荐） -->
     <section class="card">
       <h2 class="font-semibold mb-1">人群定位</h2>
-      <p class="text-[11px] text-slate-400 mb-4">首页的每日三餐推荐将按你的人群自动调整能量与营养结构</p>
+      <p class="text-[11px] text-slate-400 mb-4">这是当前用户的长期档案；首页“今日推荐”人群可以单独选择，不会修改这里</p>
       <div class="space-y-4">
         <div v-for="g in POP_GROUPS" :key="g.id">
           <p class="flex items-center gap-1.5 text-xs font-semibold text-slate-500 mb-2">

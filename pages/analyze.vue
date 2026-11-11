@@ -14,6 +14,16 @@ const commentText = ref('')
 const commenting = ref(true)
 const commentDone = ref(false)
 const streamError = ref(false)
+const addFoodDialog = ref(false)
+const newFood = reactive({
+  name: '',
+  region: '未标注',
+  grams: 100,
+  kcal: 100,
+  protein: 5,
+  fat: 3,
+  carb: 12
+})
 
 const totals = computed(() => (diet.pending ? sumNutrition(diet.pending.foods) : null))
 const foodsRef = computed(() => diet.pending?.foods ?? [])
@@ -21,6 +31,7 @@ const foodsRef = computed(() => diet.pending?.foods ?? [])
 // 流式点评（骨架阶段 mock；接入智谱后协议不变）
 let aborter: AbortController | null = null
 async function runComment() {
+  aborter?.abort()
   commenting.value = true
   commentDone.value = false
   streamError.value = false
@@ -38,6 +49,7 @@ async function runComment() {
         } else if (e.type === 'done') {
           currentStage.value = 3
           commentDone.value = true
+          commenting.value = false
         }
       },
       aborter.signal
@@ -46,6 +58,7 @@ async function runComment() {
     streamError.value = true
   } finally {
     commenting.value = false
+    if (!streamError.value && commentDone.value) currentStage.value = 3
   }
 }
 
@@ -58,11 +71,48 @@ function retry() {
   runComment()
 }
 
+function resetNewFood() {
+  Object.assign(newFood, { name: '', region: '未标注', grams: 100, kcal: 100, protein: 5, fat: 3, carb: 12 })
+}
+
+async function addFood() {
+  if (!diet.pending) return
+  const name = newFood.name.trim()
+  if (!name) {
+    ElMessage.warning('请填写菜品名称')
+    return
+  }
+  if (![newFood.grams, newFood.kcal, newFood.protein, newFood.fat, newFood.carb].every((n) => Number.isFinite(n) && n >= 0)) {
+    ElMessage.warning('请填写有效的份量和营养值')
+    return
+  }
+  diet.pending.foods.push({
+    id: `manual-${Date.now()}`,
+    name: name.slice(0, 40),
+    region: newFood.region || '未标注',
+    grams: Math.min(2000, Math.max(5, Math.round(newFood.grams))),
+    confidence: 1,
+    per100: {
+      kcal: Math.max(0, Number(newFood.kcal)),
+      protein: Math.max(0, Number(newFood.protein)),
+      fat: Math.max(0, Number(newFood.fat)),
+      carb: Math.max(0, Number(newFood.carb))
+    }
+  })
+  addFoodDialog.value = false
+  resetNewFood()
+  await nextTick()
+  // 让点评上下文包含刚补录的菜品，而不是继续使用旧识别列表。
+  runComment()
+}
+
 function confirm() {
   const record = diet.confirmPending()
   if (record) {
     ElMessage.success('已记录这一餐 🎉')
-    router.push('/')
+    router.push('/record')
+  } else if (diet.pending) {
+    ElMessage.error('保存失败，识别结果已保留，请重试')
   }
 }
 
@@ -107,7 +157,7 @@ onUnmounted(() => aborter?.abort())
       </button>
       <div>
         <h1 class="text-xl font-bold">识餐结果</h1>
-        <p class="text-xs text-slate-400">确认食物与份量，AI 营养师给出点评</p>
+        <p class="text-xs text-slate-400">确认食物与份量，AI 营养师给出点评（照片仅用于本次识别）</p>
       </div>
     </header>
 
@@ -127,7 +177,7 @@ onUnmounted(() => aborter?.abort())
           class="w-36 h-36 rounded-xl object-cover shrink-0 bg-slate-100"
         />
         <div class="flex-1 w-full space-y-3">
-          <StageIndicator :stages="stages" :current="Math.min(currentStage, 2)" />
+          <StageIndicator :stages="stages" :current="commentDone ? stages.length : Math.min(currentStage, stages.length - 1)" />
           <div class="flex items-baseline gap-2">
             <span class="text-3xl font-bold text-primary-600 tabular-nums">
               {{ Math.round(totals?.kcal ?? 0) }}
@@ -139,7 +189,10 @@ onUnmounted(() => aborter?.abort())
 
       <!-- 食物列表（可修正） -->
       <section class="space-y-2">
-        <h2 class="font-semibold px-1 text-sm text-slate-500">识别结果（可修正）</h2>
+        <div class="flex items-center justify-between px-1">
+          <h2 class="font-semibold text-sm text-slate-500">识别结果（可修正）</h2>
+          <button class="text-xs text-primary-600 hover:underline" @click="addFoodDialog = true">＋手动添加菜品</button>
+        </div>
         <FoodCard
           v-for="(f, i) in diet.pending.foods"
           :key="f.id"
@@ -187,5 +240,31 @@ onUnmounted(() => aborter?.abort())
 
       <DisclaimerBar />
     </template>
+
+    <el-dialog v-model="addFoodDialog" title="手动添加菜品" width="min(92vw, 520px)" @closed="resetNewFood">
+      <el-form label-width="72px" @submit.prevent="addFood">
+        <el-form-item label="菜品名称" required>
+          <el-input v-model="newFood.name" maxlength="40" show-word-limit placeholder="例如：清炒油麦菜" />
+        </el-form-item>
+        <el-form-item label="地域/风味">
+          <el-input v-model="newFood.region" maxlength="20" placeholder="例如：西餐、日料、东北烧烤、甜点" />
+        </el-form-item>
+        <el-form-item label="份量">
+          <el-input-number v-model="newFood.grams" :min="5" :max="2000" :step="10" />
+          <span class="text-xs text-slate-400 ml-2">克</span>
+        </el-form-item>
+        <p class="text-xs text-slate-400 mb-2 ml-[72px]">以下营养值均填写“每 100 克”</p>
+        <div class="grid grid-cols-2 gap-3 ml-[72px]">
+          <el-form-item label="热量" label-width="48px"><el-input-number v-model="newFood.kcal" :min="0" :max="2000" :step="1" /></el-form-item>
+          <el-form-item label="蛋白质" label-width="60px"><el-input-number v-model="newFood.protein" :min="0" :max="200" :step="0.1" /></el-form-item>
+          <el-form-item label="脂肪" label-width="48px"><el-input-number v-model="newFood.fat" :min="0" :max="200" :step="0.1" /></el-form-item>
+          <el-form-item label="碳水" label-width="48px"><el-input-number v-model="newFood.carb" :min="0" :max="300" :step="0.1" /></el-form-item>
+        </div>
+      </el-form>
+      <template #footer>
+        <el-button @click="addFoodDialog = false">取消</el-button>
+        <el-button type="primary" @click="addFood">添加并重新点评</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>

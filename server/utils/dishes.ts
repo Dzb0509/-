@@ -7,7 +7,7 @@ import type { Dish, PopulationId } from '~/types/recommend'
  *   儿童(child) · 婴幼儿(infant/toddler) · 孕产(pregnant/lactation)
  * 做法步骤可被 dishes-detail.json（AI 生成的超详细教程）覆盖。
  */
-import detailSteps from './dishes-detail.json'
+// 未经食材、份量一致性审核的生成详情不覆盖原始菜谱。
 import generatedJson from './dishes-generated.json'
 
 const RAW_HANDWRITTEN: Dish[] = [
@@ -130,11 +130,7 @@ const GENERATED: Dish[] = (generatedJson as unknown as Dish[]).filter(
 
 const RAW_DISHES: Dish[] = [...RAW_HANDWRITTEN, ...GENERATED]
 
-export const DISHES: Dish[] = RAW_DISHES.map((d) => {
-  // AI 生成的超详细教程（dishes-detail.json）存在时覆盖默认步骤
-  const detail = (detailSteps as Record<string, string[] | undefined>)[d.id]
-  return Array.isArray(detail) && detail.length >= 3 ? { ...d, steps: detail } : d
-})
+export const DISHES: Dish[] = RAW_DISHES
 
 export const BREAKFAST_IDS = ['d001', 'd002', 'd003', 'd004', 'd005', 'd006', 'd007', 'd008']
 export const SNACK_IDS = ['d1101', 'd1102']
