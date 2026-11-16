@@ -3,8 +3,6 @@
  * 「换一张」时按菜名从必应搜真实菜品图，下载后裁边去水印 + sharp 压缩。
  * 不做 GLM-4V 质检（省钱省时）——候选里用户不满意可继续点「换一张」轮换。
  */
-import sharp from 'sharp'
-
 const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36'
 
@@ -26,6 +24,7 @@ export async function bingImageUrls(query: string, count = 10): Promise<string[]
 
 /** 裁掉四边 12%（物理去除角落水印）再压成 512px JPEG */
 async function cropAndCompress(raw: Buffer): Promise<Buffer> {
+  const { default: sharp } = await import('sharp')
   const img = sharp(raw)
   const meta = await img.metadata()
   const w = meta.width ?? 0

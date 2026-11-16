@@ -1,13 +1,9 @@
 import { defineEventHandler, getHeader, getQuery, send, setResponseStatus, setHeader, createError } from 'h3'
 import { createHash } from 'node:crypto'
-import fs from 'node:fs'
-import path from 'node:path'
-import sharp from 'sharp'
-const toJpeg = (buf: Buffer) => sharp(buf).resize(512, 512, { fit: 'cover' }).jpeg({ quality: 82 }).toBuffer()
 import { fetchBingDishImage, fetchBingDishImageRemote } from '../utils/bingimg'
 
 /** 本地缓存优先，免费网络候选受并发限制；公共读取不生成付费图片。 */
-const IMG_DIR = path.join(process.cwd(), 'public', 'dish-imgs')
+const isWorkerRuntime = () => Boolean((globalThis as any).caches?.default)
 const inflight = new Map<string, Promise<Buffer | null>>()
 
 export default defineEventHandler(async (event) => {
@@ -23,7 +19,7 @@ export default defineEventHandler(async (event) => {
   }
 
   // Sites 的 Cloudflare Worker 没有可写文件系统，图片接口直接读取远程候选图，失败时返回可见占位图。
-  if ((event.context as { cloudflare?: unknown }).cloudflare) {
+  if ((event.context as { cloudflare?: unknown }).cloudflare || isWorkerRuntime()) {
     const remote = await fetchBingDishImageRemote(name, alt)
     if (remote) {
       setHeader(event, 'Cache-Control', 'public, max-age=3600')
@@ -35,6 +31,15 @@ export default defineEventHandler(async (event) => {
     setHeader(event, 'Content-Type', 'image/svg+xml; charset=utf-8')
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" fill="#E4ECEF"/><text x="256" y="256" fill="#1D4E89" font-size="28" text-anchor="middle" dominant-baseline="middle">${safeName}</text></svg>`
   }
+
+  // Node-only modules are loaded lazily so Cloudflare Workers can import this route.
+  const [{ default: fs }, { default: path }, { default: sharp }] = await Promise.all([
+    import('node:fs'),
+    import('node:path'),
+    import('sharp')
+  ])
+  const toJpeg = (buf: Buffer) => sharp(buf).resize(512, 512, { fit: 'cover' }).jpeg({ quality: 82 }).toBuffer()
+  const IMG_DIR = path.join(process.cwd(), 'public', 'dish-imgs')
 
   const slug = createHash('md5').update(name).digest('hex').slice(0, 16)
   const jpgFile = path.join(IMG_DIR, `${slug}.jpg`)
