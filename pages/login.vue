@@ -20,11 +20,11 @@ async function submit() {
 </script>
 
 <template>
-  <div class="min-h-screen bg-slate-50 flex items-center justify-center px-4">
-    <div class="w-full max-w-md card !p-7">
+  <div class="min-h-screen bg-porcelain flex items-center justify-center px-4 py-8">
+    <div class="app-mat w-full max-w-md card !p-7">
       <div class="text-center mb-7">
-        <div class="mx-auto w-14 h-14 rounded-2xl bg-primary-50 flex items-center justify-center text-3xl">🥗</div>
-        <h1 class="text-2xl font-bold mt-4">食刻 AI</h1>
+        <div class="mx-auto w-14 h-14 rounded-md bg-celadon flex items-center justify-center text-3xl">🥗</div>
+        <h1 class="text-2xl font-bold mt-4 text-primary-700">食刻 <em class="not-italic text-tomato">AI</em></h1>
         <p class="text-sm text-slate-400 mt-1">你的 AI 营养分析师</p>
       </div>
       <el-form label-position="top" @submit.prevent="submit">

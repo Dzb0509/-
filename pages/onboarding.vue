@@ -15,7 +15,7 @@ function finish() {
 </script>
 
 <template>
-  <div class="min-h-screen bg-slate-50 px-4 py-8">
+  <div class="min-h-screen bg-porcelain px-4 py-8">
     <div class="max-w-3xl mx-auto space-y-5">
       <header class="text-center">
         <p class="text-3xl">🥗</p>

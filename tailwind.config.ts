@@ -11,28 +11,40 @@ export default <Partial<Config>>{
   theme: {
     extend: {
       colors: {
-        // 健康主题：主色采用翡翠绿系，强调色用于热量
-        primary: {
-          DEFAULT: '#10B981',
-          50: '#ECFDF5',
-          100: '#D1FAE5',
-          200: '#A7F3D0',
-          300: '#6EE7B7',
-          400: '#34D399',
-          500: '#10B981',
-          600: '#059669',
-          700: '#047857',
-          800: '#065F46',
-          900: '#064E3B'
+        // 来自 docs/landing.html 的瓷白 / 青花靛 / 番茄红 / 溏心黄配色
+        porcelain: '#F7F3EC',
+        ink: '#26221B',
+        indigo: {
+          DEFAULT: '#1D4E89',
+          deep: '#16406F',
+          pale: '#EAF1F7'
         },
-        accent: { DEFAULT: '#F97316', light: '#FDBA74', dark: '#C2410C' }
+        celadon: '#E4ECEF',
+        tomato: { DEFAULT: '#D9442B', dark: '#B93623' },
+        yolk: '#E8A33D',
+        primary: {
+          DEFAULT: '#1D4E89',
+          50: '#EAF1F7',
+          100: '#D8E6F2',
+          200: '#B8CDE0',
+          300: '#7FA6C8',
+          400: '#4C7EAF',
+          500: '#1D4E89',
+          600: '#16406F',
+          700: '#12385F',
+          800: '#0F2D4D',
+          900: '#0A2038'
+        },
+        accent: { DEFAULT: '#D9442B', light: '#E8A33D', dark: '#B93623' }
       },
       fontFamily: {
-        sans: ['system-ui', 'PingFang SC', 'Microsoft YaHei', 'sans-serif']
+        sans: ['system-ui', 'PingFang SC', 'Microsoft YaHei', 'sans-serif'],
+        serif: ['Noto Serif SC', 'Songti SC', 'SimSun', 'serif'],
+        mono: ['ui-monospace', 'SFMono-Regular', 'Consolas', 'monospace']
       },
       boxShadow: {
-        card: '0 1px 3px rgba(16, 185, 129, 0.08), 0 4px 16px rgba(0, 0, 0, 0.06)',
-        'card-hover': '0 2px 6px rgba(16, 185, 129, 0.12), 0 10px 28px rgba(0, 0, 0, 0.10)'
+        card: '0 1px 2px rgba(38, 34, 27, 0.04), 0 8px 24px rgba(38, 34, 27, 0.06)',
+        'card-hover': '0 4px 10px rgba(29, 78, 137, 0.10), 0 14px 32px rgba(38, 34, 27, 0.10)'
       }
     }
   }

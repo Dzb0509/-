@@ -12,20 +12,20 @@ const navItems = [
 </script>
 
 <template>
-  <div class="flex min-h-screen">
+  <div class="min-h-screen bg-porcelain">
     <div v-if="diet.storageError" role="alert" class="fixed top-0 inset-x-0 z-50 bg-red-50 text-red-700 p-3 text-center">{{ diet.storageError }} <button class="underline" @click="diet.persist()">重试保存</button></div>
     <!-- 桌面侧边栏 -->
-    <aside class="hidden md:flex flex-col w-60 shrink-0 border-r border-slate-100 bg-white px-4 py-6 sticky top-0 h-screen overflow-y-auto">
+    <aside class="hidden md:flex flex-col fixed left-0 top-0 bottom-0 z-30 w-60 shrink-0 border-r border-black/10 bg-porcelain px-4 py-6 overflow-y-auto">
       <NuxtLink to="/" class="flex items-center gap-2.5 px-2 mb-8">
-        <span class="w-9 h-9 rounded-xl bg-primary-50 flex items-center justify-center text-xl">🥗</span>
-        <span class="text-lg font-bold tracking-tight">食刻 AI</span>
+        <span class="w-9 h-9 rounded-md bg-celadon flex items-center justify-center text-xl">🥗</span>
+        <span class="text-lg font-bold tracking-tight font-serif text-primary-700">食刻 <em class="not-italic text-tomato">AI</em></span>
       </NuxtLink>
       <nav class="flex flex-col gap-1">
         <NuxtLink
           v-for="item in navItems"
           :key="item.to"
           :to="item.to"
-          class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-500 hover:bg-primary-50 hover:text-primary-700 transition-colors"
+          class="flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium text-slate-500 hover:bg-primary-50 hover:text-primary-700 transition-colors"
           exact-active-class="!bg-primary-50 !text-primary-700"
         >
           <NavIcon :name="item.icon" class="w-5 h-5" />
@@ -38,8 +38,8 @@ const navItems = [
     </aside>
 
     <!-- 主内容区（PC 宽幅） -->
-    <main class="flex-1 min-w-0 pb-20 md:pb-0">
-      <div class="max-w-6xl mx-auto px-6 lg:px-10 py-8">
+    <main class="min-w-0 pb-20 md:pb-0 md:ml-60">
+      <div class="app-mat max-w-6xl mx-auto px-5 sm:px-6 lg:px-10 py-8 my-3 sm:my-6">
         <slot />
       </div>
     </main>
@@ -48,7 +48,7 @@ const navItems = [
     <AiMascot />
 
     <!-- 移动端底部导航（兼容小屏） -->
-    <nav class="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-slate-100 flex pb-[env(safe-area-inset-bottom)]">
+    <nav class="md:hidden fixed bottom-0 inset-x-0 z-40 bg-porcelain border-t border-black/10 flex pb-[env(safe-area-inset-bottom)]">
       <NuxtLink
         v-for="item in navItems"
         :key="item.to"
