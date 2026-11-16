@@ -44,4 +44,7 @@ check(index.includes('watch(() => diet.syncVersion'), 'homepage refreshes after 
 const authMiddleware = read('middleware/auth.global.ts')
 check(authMiddleware.includes('diet.isAuthenticated'), 'global auth middleware protects pages')
 
+const profile = read('pages/profile.vue')
+check(profile.includes('aria-label="切换要编辑的用户"'), 'basic profile info has user switcher')
+
 console.log(`PASS ${checks} source and template regression checks`)

@@ -31,6 +31,11 @@ function addUser() {
   ElMessage.success(`已切换到${diet.profile.nickname}`)
 }
 
+function switchActiveUser(id: string) {
+  diet.switchUser(id)
+  Object.assign(form, diet.profile)
+}
+
 function logout() {
   diet.logout()
   router.push('/login')
@@ -63,7 +68,7 @@ function save() {
           <h2 class="font-semibold">当前用户</h2>
           <p class="text-[11px] text-slate-400">每个用户的饮食记录、口味画像和周报相互独立</p>
         </div>
-        <el-select :model-value="diet.activeUserId" class="!w-36" @change="(id: string) => diet.switchUser(id)">
+        <el-select :model-value="diet.activeUserId" class="!w-36" @change="switchActiveUser">
           <el-option v-for="user in diet.users" :key="user.id" :label="user.profile.nickname" :value="user.id" />
         </el-select>
       </div>
@@ -157,7 +162,15 @@ function save() {
 
     <!-- 基本信息 -->
     <section class="card">
-      <h2 class="font-semibold mb-4">基本信息</h2>
+      <div class="flex items-center justify-between gap-3 mb-4">
+        <div>
+          <h2 class="font-semibold">基本信息</h2>
+          <p class="text-[11px] text-slate-400 mt-1">正在编辑：{{ diet.profile.nickname }}</p>
+        </div>
+        <el-select :model-value="diet.activeUserId" class="!w-36" aria-label="切换要编辑的用户" @change="switchActiveUser">
+          <el-option v-for="user in diet.users" :key="user.id" :label="user.profile.nickname" :value="user.id" />
+        </el-select>
+      </div>
       <el-form label-width="80px" label-position="left">
         <el-form-item label="昵称">
           <el-input v-model="form.nickname" maxlength="12" />
