@@ -59,6 +59,30 @@ async function download(url: string): Promise<Buffer | null> {
   }
 }
 
+/** Worker 环境不能写本地磁盘，返回远程图片原始内容作为轻量回退。 */
+export async function fetchBingDishImageRemote(
+  name: string,
+  preferIndex: number
+): Promise<{ body: ArrayBuffer; contentType: string } | null> {
+  const core = name.replace(/[（(][^）)]*[）)]/g, '').trim() || name
+  const urls = await bingImageUrls(`${core} 家常菜 成品 特写`, 12)
+  if (!urls.length) return null
+  const start = ((preferIndex % urls.length) + urls.length) % urls.length
+  for (let k = 0; k < 5; k++) {
+    try {
+      const res = await fetch(urls[(start + k) % urls.length], {
+        headers: { 'User-Agent': UA, Referer: 'https://cn.bing.com/' },
+        signal: AbortSignal.timeout(12000)
+      })
+      const contentType = res.headers.get('content-type') ?? ''
+      if (res.ok && contentType.startsWith('image/')) return { body: await res.arrayBuffer(), contentType }
+    } catch {
+      /* 换下一张候选图 */
+    }
+  }
+  return null
+}
+
 /**
  * 按菜名从必应取一张「第 alt 张」候选图。
  * 从 preferIndex 开始顺延尝试（最多 5 个），全部失败返回 null。

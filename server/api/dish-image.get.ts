@@ -1,10 +1,10 @@
-import { defineEventHandler, getQuery, send, setResponseStatus, setHeader, createError } from 'h3'
+import { defineEventHandler, getHeader, getQuery, send, setResponseStatus, setHeader, createError } from 'h3'
 import { createHash } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import sharp from 'sharp'
 const toJpeg = (buf: Buffer) => sharp(buf).resize(512, 512, { fit: 'cover' }).jpeg({ quality: 82 }).toBuffer()
-import { fetchBingDishImage } from '../utils/bingimg'
+import { fetchBingDishImage, fetchBingDishImageRemote } from '../utils/bingimg'
 
 /** 本地缓存优先，免费网络候选受并发限制；公共读取不生成付费图片。 */
 const IMG_DIR = path.join(process.cwd(), 'public', 'dish-imgs')
@@ -22,6 +22,20 @@ export default defineEventHandler(async (event) => {
     return
   }
 
+  // Sites 的 Cloudflare Worker 没有可写文件系统，图片接口直接读取远程候选图，失败时返回可见占位图。
+  if ((event.context as { cloudflare?: unknown }).cloudflare) {
+    const remote = await fetchBingDishImageRemote(name, alt)
+    if (remote) {
+      setHeader(event, 'Cache-Control', 'public, max-age=3600')
+      setHeader(event, 'Content-Type', remote.contentType)
+      return new Response(remote.body)
+    }
+    const safeName = name.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char] ?? char))
+    setHeader(event, 'Cache-Control', 'public, max-age=3600')
+    setHeader(event, 'Content-Type', 'image/svg+xml; charset=utf-8')
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" fill="#E4ECEF"/><text x="256" y="256" fill="#1D4E89" font-size="28" text-anchor="middle" dominant-baseline="middle">${safeName}</text></svg>`
+  }
+
   const slug = createHash('md5').update(name).digest('hex').slice(0, 16)
   const jpgFile = path.join(IMG_DIR, `${slug}.jpg`)
   const pngFile = path.join(IMG_DIR, `${slug}.png`)
@@ -31,7 +45,7 @@ export default defineEventHandler(async (event) => {
     const etag = `"${createHash('md5').update(buf).digest('hex')}"`
     setHeader(event, 'Cache-Control', 'no-cache')
     setHeader(event, 'ETag', etag)
-    if (event.node.req.headers['if-none-match'] === etag) {
+    if (getHeader(event, 'if-none-match') === etag) {
       setResponseStatus(event, 304)
       return
     }
@@ -75,7 +89,7 @@ export default defineEventHandler(async (event) => {
     const etag = `"${createHash('md5').update(buf).digest('hex')}"`
     setHeader(event, 'Cache-Control', 'no-cache')
     setHeader(event, 'ETag', etag)
-    if (event.node.req.headers['if-none-match'] === etag) {
+    if (getHeader(event, 'if-none-match') === etag) {
       setResponseStatus(event, 304)
       return
     }
