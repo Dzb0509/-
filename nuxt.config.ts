@@ -9,6 +9,7 @@ export default defineNuxtConfig({
   modules: ['@nuxtjs/tailwindcss', '@pinia/nuxt', '@element-plus/nuxt'],
   css: ['~/assets/css/main.css'],
   app: {
+    baseURL: process.env.NUXT_APP_BASE_URL || '/',
     head: {
       title: '食刻 AI · 你的 AI 营养分析师',
       htmlAttrs: { lang: 'zh-CN' },
