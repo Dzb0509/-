@@ -47,6 +47,8 @@ export interface UserProfile {
   population: PopulationId
   /** AI 自定义偏好（口味/需求/忌口，由 /api/customize 生成摘要） */
   custom?: CustomPref
+  healthNotes?: string
+  onboardingComplete?: boolean
 }
 
 /** 计算某食物按当前克重的营养总量 */

@@ -8,6 +8,7 @@ import { topEntries } from '~/types/taste'
 const diet = useDietStore()
 const form = reactive({ ...diet.profile })
 const newUserName = ref('')
+const router = useRouter()
 
 const goalOptions = [
   { value: 'lose', label: '减脂' },
@@ -28,6 +29,11 @@ function addUser() {
   Object.assign(form, diet.profile)
   newUserName.value = ''
   ElMessage.success(`已切换到${diet.profile.nickname}`)
+}
+
+function logout() {
+  diet.logout()
+  router.push('/login')
 }
 
 watch(() => diet.activeUserId, () => Object.assign(form, diet.profile))
@@ -66,6 +72,8 @@ function save() {
         <button class="btn-secondary shrink-0" @click="addUser">添加用户</button>
       </div>
     </section>
+
+    <button class="w-full text-sm text-slate-400 hover:text-red-500" @click="logout">退出登录</button>
 
     <!-- 目标概览 -->
     <section class="card">

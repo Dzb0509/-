@@ -13,7 +13,7 @@ for (const file of ['server/api/vision.post.ts', 'server/api/comment.post.ts', '
   check(true, `${file} TypeScript syntax`)
 }
 
-for (const file of ['app.vue', 'components/FoodCard.vue', 'pages/index.vue', 'pages/family.vue', 'pages/report.vue']) {
+for (const file of ['app.vue', 'components/FoodCard.vue', 'pages/index.vue', 'pages/family.vue', 'pages/report.vue', 'pages/login.vue', 'pages/onboarding.vue', 'pages/profile.vue']) {
   const source = read(file)
   const parsed = parse(source, { filename: file })
   check(parsed.errors.length === 0, `${file} SFC parse`)
@@ -29,6 +29,8 @@ check(store.includes('invalidateRecommendations()'), 'record changes invalidate 
 check(store.includes('syncFromStorage()'), 'cross-tab storage sync exists')
 check(store.includes('region: dish.region'), 'recommended dishes retain cuisine')
 check(store.includes('菜系:${f.region}'), 'taste profile learns cuisine')
+check(store.includes('async registerAccount(account: string, password: string)'), 'local account registration exists')
+check(store.includes('completeOnboarding(data: Pick<UserProfile'), 'first-use onboarding persists profile')
 
 const vision = read('server/api/vision.post.ts')
 check(vision.includes('region'), 'vision prompt and parser include cuisine')
@@ -38,5 +40,8 @@ check(card.includes('v-model="food.region"'), 'food confirmation can edit region
 
 const index = read('pages/index.vue')
 check(index.includes('watch(() => diet.syncVersion'), 'homepage refreshes after records sync')
+
+const authMiddleware = read('middleware/auth.global.ts')
+check(authMiddleware.includes('diet.isAuthenticated'), 'global auth middleware protects pages')
 
 console.log(`PASS ${checks} source and template regression checks`)

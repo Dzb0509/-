@@ -22,6 +22,21 @@ export interface DietUser {
   records: FoodRecord[]
 }
 
+interface AuthAccount {
+  id: string
+  account: string
+  passwordHash: string
+}
+
+async function hashPassword(value: string): Promise<string> {
+  if (import.meta.client && globalThis.crypto?.subtle) {
+    const bytes = new TextEncoder().encode(value)
+    const digest = await crypto.subtle.digest('SHA-256', bytes)
+    return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('')
+  }
+  return value
+}
+
 function loadPersisted() {
   if (!import.meta.client) return null
   try {
@@ -45,6 +60,8 @@ export const useDietStore = defineStore('diet', {
       lastSyncedAt: 0,
       users: migratedUsers as DietUser[],
       activeUserId: activeUser.id,
+      authAccounts: (persisted?.authAccounts ?? []) as AuthAccount[],
+      authUserId: (persisted?.authUserId ?? null) as string | null,
       recommendationPopulation: (persisted?.recommendationPopulation ?? activeUser.profile.population) as PopulationId,
       records: activeUser.records as FoodRecord[],
       profile: activeUser.profile as UserProfile,
@@ -65,6 +82,9 @@ export const useDietStore = defineStore('diet', {
   },
 
   getters: {
+    isAuthenticated(state): boolean {
+      return !!state.authUserId && state.authAccounts.some((account) => account.id === state.authUserId)
+    },
     todayRecords(state): FoodRecord[] {
       const today = new Date()
       today.setHours(0, 0, 0, 0)
@@ -111,6 +131,65 @@ export const useDietStore = defineStore('diet', {
   },
 
   actions: {
+    async registerAccount(account: string, password: string) {
+      const normalized = account.trim().toLowerCase()
+      if (normalized.length < 3 || password.length < 6) return { ok: false, message: '账号至少 3 位，密码至少 6 位' }
+      if (this.authAccounts.some((item) => item.account === normalized)) return { ok: false, message: '账号已存在' }
+      const passwordHash = await hashPassword(password)
+      // 兼容升级前已经存在的本地记录。首次注册时沿用默认用户，避免历史饮食数据被留在一个无法登录的档案里。
+      if (this.authAccounts.length === 0 && this.users.length === 1 && this.users[0].id === 'u-default') {
+        const user = this.users[0]
+        user.profile = { ...user.profile, nickname: normalized, onboardingComplete: false }
+        this.authAccounts.push({ id: user.id, account: normalized, passwordHash })
+        this.authUserId = user.id
+        this.activeUserId = user.id
+        this.profile = user.profile
+        this.records = user.records
+        this.recommendationPopulation = user.profile.population
+        this.planCache = {}
+        this.persist()
+        return { ok: true }
+      }
+      const id = `u-${Date.now()}`
+      const profile = { ...DEFAULT_PROFILE, nickname: normalized, onboardingComplete: false }
+      this.users.push({ id, profile, records: [] })
+      this.authAccounts.push({ id, account: normalized, passwordHash })
+      this.authUserId = id
+      this.activeUserId = id
+      this.profile = profile
+      this.records = []
+      this.recommendationPopulation = profile.population
+      this.planCache = {}
+      this.persist()
+      return { ok: true }
+    },
+    async loginAccount(account: string, password: string) {
+      const normalized = account.trim().toLowerCase()
+      const passwordHash = await hashPassword(password)
+      const auth = this.authAccounts.find((item) => item.account === normalized && item.passwordHash === passwordHash)
+      if (!auth) return { ok: false, message: '账号或密码错误' }
+      const user = this.users.find((item) => item.id === auth.id)
+      if (!user) return { ok: false, message: '用户档案不存在' }
+      this.authUserId = auth.id
+      this.activeUserId = auth.id
+      this.profile = user.profile
+      this.records = user.records
+      this.recommendationPopulation = user.profile.population
+      this.planCache = {}
+      this.persist()
+      return { ok: true }
+    },
+    logout() {
+      this.authUserId = null
+      this.pending = null
+      this.persist()
+    },
+    completeOnboarding(data: Pick<UserProfile, 'population' | 'goal' | 'healthNotes'>) {
+      this.profile = { ...this.profile, ...data, onboardingComplete: true }
+      this.recommendationPopulation = data.population
+      this.invalidateRecommendations()
+      this.persist()
+    },
     syncActiveUser() {
       const user = this.users.find((u) => u.id === this.activeUserId)
       if (user) {
@@ -163,6 +242,8 @@ export const useDietStore = defineStore('diet', {
       if (!persisted) return
       const users = (persisted.users as DietUser[] | undefined) ?? [{ id: 'u-default', profile: persisted.profile ?? this.profile, records: persisted.records ?? [] }]
       this.users = users
+      this.authAccounts = (persisted.authAccounts ?? this.authAccounts) as AuthAccount[]
+      this.authUserId = (persisted.authUserId ?? this.authUserId) as string | null
       this.activeUserId = persisted.activeUserId ?? users[0].id
       const active = users.find((u) => u.id === this.activeUserId) ?? users[0]
       this.profile = active.profile
@@ -265,7 +346,7 @@ export const useDietStore = defineStore('diet', {
       // 照片仅用于本次识别，持久化营养与菜品元数据，避免 base64 撑满配额。
       this.syncActiveUser()
       const users = this.users.map((user) => ({ ...user, records: user.records.map(({ image, ...record }) => record) }))
-      const data = { recommendationCacheVersion: 2, users, activeUserId: this.activeUserId, recommendationPopulation: this.recommendationPopulation, records: this.records.map(({ image, ...record }) => record), profile: this.profile, family: this.family, userRecipes: this.userRecipes, planCache: this.planCache }
+      const data = { recommendationCacheVersion: 2, users, activeUserId: this.activeUserId, authAccounts: this.authAccounts, authUserId: this.authUserId, recommendationPopulation: this.recommendationPopulation, records: this.records.map(({ image, ...record }) => record), profile: this.profile, family: this.family, userRecipes: this.userRecipes, planCache: this.planCache }
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
         this.storageError = ''
