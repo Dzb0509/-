@@ -119,7 +119,14 @@ const reportText = ref('')
 const generating = ref(false)
 const reportInputKey = computed(() => diet.records.map(r => `${r.id}:${r.time}:${r.foods.map(f => `${f.name}:${f.region ?? ''}:${f.grams}`).join(',')}`).join('|'))
 let reportRefreshTimer: ReturnType<typeof setTimeout> | null = null
+let reportAborter: AbortController | null = null
+let reportGeneration = 0
 async function generate() {
+  // 连续切换页面或刷新记录时，主动终止上一条 SSE，避免请求继续占用连接。
+  reportAborter?.abort()
+  const generation = ++reportGeneration
+  const aborter = new AbortController()
+  reportAborter = aborter
   generating.value = true
   reportText.value = ''
   try {
@@ -135,12 +142,19 @@ async function generate() {
       tasteRegions: regionTags.value,
       topDishes: topDishes.value
     }, (e) => {
+      if (generation !== reportGeneration) return
       if (e.type === 'text') reportText.value += e.text ?? ''
-    })
-  } catch {
-    reportText.value = '生成失败，请重试。'
+    }, aborter.signal)
+  } catch (error: any) {
+    // 离开周报页或重新生成时的取消是正常流程，不要把它显示成错误。
+    if (error?.name !== 'AbortError' && generation === reportGeneration) {
+      reportText.value = '生成失败，请重试。'
+    }
   } finally {
-    generating.value = false
+    if (generation === reportGeneration) {
+      generating.value = false
+      reportAborter = null
+    }
   }
 }
 onMounted(generate)
@@ -148,7 +162,12 @@ watch(reportInputKey, () => {
   if (reportRefreshTimer) clearTimeout(reportRefreshTimer)
   reportRefreshTimer = setTimeout(() => generate(), 180)
 })
-onUnmounted(() => { if (reportRefreshTimer) clearTimeout(reportRefreshTimer) })
+onUnmounted(() => {
+  if (reportRefreshTimer) clearTimeout(reportRefreshTimer)
+  reportGeneration++
+  reportAborter?.abort()
+  reportAborter = null
+})
 </script>
 
 <template>
