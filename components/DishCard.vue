@@ -23,7 +23,14 @@ const heroLoaded = ref(false)
 /** 「换一张」轮换计数（alt=N 从必应网络图候选轮换，URL 版本号防浏览器缓存） */
 const altIdx = ref(0)
 const regenerating = ref(false)
-const fallbackImgUrl = assetUrl('/dish-placeholder.svg')
+/** 首屏使用随应用发布的实物图，避免未经核验的网络候选图覆盖菜品。 */
+const fallbackImgUrl = computed(() => {
+  const name = props.dish.name
+  if (/[鸡鸭鹅禽肉|鸡翅|鸡腿|鸡胸|牛肉|猪肉|羊肉|肉丝|排骨]/.test(name)) return assetUrl('/hero-protein.jpg')
+  if (/[鱼虾蟹贝|海鲜|三文鱼|鲈鱼|带鱼|虾仁|扇贝]/.test(name)) return assetUrl('/hero-sodium.jpg')
+  if (/[饭|面|粉|粥|藜麦|杂粮|主食|饼]/.test(name)) return assetUrl('/hero-grains.jpg')
+  return assetUrl('/hero-rainbow.jpg')
+})
 
 /** 全局图片版本号：批量替换缓存图后递增，强制浏览器丢弃旧图缓存 */
 const IMG_GLOBAL_VER = '20261030'
@@ -36,13 +43,15 @@ const thumbSrc = ref('')
 const heroSrc = ref('')
 
 watch(imgUrl, (url) => {
-  // 先显示随前端上传的本地图，再尝试替换成后端真实图。
-  thumbSrc.value = fallbackImgUrl
-  heroSrc.value = fallbackImgUrl
+  // 首屏只显示本地已随应用发布的实物图，避免随机网络候选造成错图。
+  thumbSrc.value = fallbackImgUrl.value
+  heroSrc.value = fallbackImgUrl.value
   thumbOk.value = true
   heroOk.value = true
   thumbLoaded.value = true
   heroLoaded.value = true
+  // 只有用户主动点击“换一张”时，才尝试网络候选图。
+  if (!altIdx.value) return
   const probe = new Image()
   probe.onload = () => {
     thumbSrc.value = url
@@ -52,8 +61,8 @@ watch(imgUrl, (url) => {
 }, { immediate: true })
 
 function onThumbError() {
-  if (thumbSrc.value !== fallbackImgUrl) {
-    thumbSrc.value = fallbackImgUrl
+  if (thumbSrc.value !== fallbackImgUrl.value) {
+    thumbSrc.value = fallbackImgUrl.value
     thumbLoaded.value = true
     return
   }
@@ -61,8 +70,8 @@ function onThumbError() {
 }
 
 function onHeroError() {
-  if (heroSrc.value !== fallbackImgUrl) {
-    heroSrc.value = fallbackImgUrl
+  if (heroSrc.value !== fallbackImgUrl.value) {
+    heroSrc.value = fallbackImgUrl.value
     heroLoaded.value = true
     return
   }
