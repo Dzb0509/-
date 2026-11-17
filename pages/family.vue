@@ -132,8 +132,15 @@ async function fetchPlan(meals?: ('breakfast' | 'lunch' | 'dinner')[], opts?: { 
     })
     if (seq !== reqSeq) return // 已有更新的请求，丢弃本次过期结果
     if (meals?.length && plan.value) {
-      for (const m of meals) plan.value.meals[m] = res.meals[m]
-      plan.value.source = res.source
+      // 替换整份结果并写回缓存，避免只改嵌套数组后重新进入页面又恢复旧餐单。
+      const updated: RecommendResult = {
+        ...plan.value,
+        source: res.source,
+        meals: { ...plan.value.meals }
+      }
+      for (const m of meals) updated.meals[m] = res.meals[m] ?? []
+      plan.value = updated
+      diet.cachePlan(planKey(), updated)
     } else {
       plan.value = res
       diet.cachePlan(planKey(), res)

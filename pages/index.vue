@@ -66,8 +66,16 @@ async function fetchPlan(meals?: ('breakfast' | 'lunch' | 'dinner')[], opts?: { 
     })
     if (seq !== reqSeq) return // 已有更新的请求，丢弃本次过期结果
     if (meals?.length && plan.value) {
-      for (const m of meals) plan.value.meals[m] = res.meals[m]
-      plan.value.source = res.source
+      // 用新对象替换整份餐单，而不是只改嵌套数组。这样 Vue、缓存和跨页面
+      // 都能拿到换一换后的结果，返回首页时不会又显示旧的前几道菜。
+      const updated: RecommendResult = {
+        ...plan.value,
+        source: res.source,
+        meals: { ...plan.value.meals }
+      }
+      for (const m of meals) updated.meals[m] = res.meals[m] ?? []
+      plan.value = updated
+      diet.cachePlan(planKey(), updated)
     } else {
       plan.value = res
       diet.cachePlan(planKey(), res)

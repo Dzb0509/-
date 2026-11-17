@@ -45,12 +45,16 @@ check(profileLogout.includes('loggingOut'), 'logout button prevents duplicate cl
 
 const index = read('pages/index.vue')
 check(index.includes('watch(() => diet.syncVersion'), 'homepage refreshes after records sync')
+check(index.includes('diet.cachePlan(planKey(), updated)'), 'homepage meal refresh persists the new plan')
 
 const authMiddleware = read('middleware/auth.global.ts')
 check(authMiddleware.includes('diet.isAuthenticated'), 'global auth middleware protects pages')
 
 const profile = read('pages/profile.vue')
 check(profile.includes('aria-label="切换要编辑的用户"'), 'basic profile info has user switcher')
+
+const family = read('pages/family.vue')
+check(family.includes('diet.cachePlan(planKey(), updated)'), 'family meal refresh persists the new plan')
 
 const dietSync = read('plugins/diet-sync.client.ts')
 check(dietSync.includes('diet.syncFromStorage()'), 'diet store syncs on app startup')
