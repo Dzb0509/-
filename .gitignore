@@ -16,6 +16,10 @@ scripts/.qa-ok.json
 scripts/.webimg-*.json
 scripts/fix-mismatch-left.json
 scripts/qa-images-report.json
+
+# Local Sites deployment archives
+.site-artifact-*/
+shike-site-*.tar.gz
 .nuxt-fresh/
 .nuxt-production/
 .output-production/

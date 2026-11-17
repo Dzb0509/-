@@ -43,7 +43,7 @@
 |---|---|
 | `POST /api/recommend` | **混合推荐引擎**：规则打分采样出候选 → GLM 择优并生成整桌套餐与理由；`fast=true` 时跳过 GLM 由规则引擎 5ms 直出 |
 | `POST /api/customize` | AI 自定义偏好 → 生成个人专属方案 |
-| `GET  /api/dish-image` | 菜品图：本地缓存 → 必应候选轮换（`alt=N`）→ AI 生成兜底 |
+| `GET  /api/dish-image` | 菜品图：本地缓存 → 必应候选轮换（`alt=N`）；远程失败时由前端本地图片兜底 |
 | `POST /api/vision` | GLM-4V 拍照识餐（JSON Schema 约束输出） |
 | `POST /api/chat` | 营养师 Agent（Function Calling + SSE 流式） |
 | `POST /api/comment` | RAG 检索 + 流式营养点评 |
@@ -76,6 +76,15 @@ npm run dev
 npm run build
 node start-prod.mjs
 ```
+
+### 本地完整预览
+
+```bash
+npm run build:local
+npm run start:local
+```
+
+浏览器打开 `http://localhost:3000`。本地图片会直接从 `public/` 提供；远程菜品图不可用时，前端保留本地菜品图，不会显示空白或文字占位图。
 
 > 未配置 API Key 时，AI 能力自动降级为本地规则引擎，可完整体验全部交互流程。
 

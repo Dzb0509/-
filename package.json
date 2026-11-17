@@ -5,11 +5,13 @@
   "description": "食刻 AI · 你的 AI 营养分析师 —— 全国高校AI Web开发挑战赛参赛作品",
   "scripts": {
     "build": "nuxt build",
+    "build:local": "node scripts/build-local.mjs",
     "dev": "nuxt dev",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
     "start": "node start-prod.mjs",
+    "start:local": "node start-prod.mjs",
     "test": "node tests/regression.mjs"
   },
   "dependencies": {

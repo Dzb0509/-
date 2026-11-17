@@ -18,7 +18,9 @@ export default defineEventHandler(async (event) => {
     return
   }
 
-  // Sites 的 Cloudflare Worker 没有可写文件系统，图片接口直接读取远程候选图，失败时返回可见占位图。
+  // Sites 的 Cloudflare Worker 没有可写文件系统，图片接口直接读取远程候选图。
+  // 远程候选失败时返回 404，让前端保留已打包的本地菜品图；不能返回
+  // 一个 200 的文字 SVG，否则浏览器会把它当成成功图片替换本地图片。
   if ((event.context as { cloudflare?: unknown }).cloudflare || isWorkerRuntime()) {
     const remote = await fetchBingDishImageRemote(name, alt)
     if (remote) {
@@ -26,10 +28,8 @@ export default defineEventHandler(async (event) => {
       setHeader(event, 'Content-Type', remote.contentType)
       return new Response(remote.body)
     }
-    const safeName = name.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char] ?? char))
-    setHeader(event, 'Cache-Control', 'public, max-age=3600')
-    setHeader(event, 'Content-Type', 'image/svg+xml; charset=utf-8')
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" fill="#E4ECEF"/><text x="256" y="256" fill="#1D4E89" font-size="28" text-anchor="middle" dominant-baseline="middle">${safeName}</text></svg>`
+    setResponseStatus(event, 404)
+    return
   }
 
   // Node-only modules are loaded lazily so Cloudflare Workers can import this route.
