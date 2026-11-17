@@ -60,6 +60,14 @@ check(index.includes('watch(() => diet.syncVersion'), 'homepage refreshes after 
 check(index.includes('diet.cachePlan(planKey(), updated)'), 'homepage meal refresh persists the new plan')
 check(index.includes('hasCompleteMeals'), 'homepage ignores incomplete cached meal plans')
 check(index.includes('timeout: 15000'), 'homepage refresh reports stalled requests')
+check(index.includes('以原始输入作为缓存指纹'), 'custom recommendation cache uses raw inputs')
+
+const customDialog = read('components/CustomPrefDialog.vue')
+check(customDialog.includes('generatedInputKey'), 'custom AI result is tied to its input snapshot')
+check(customDialog.includes('generated?.summary'), 'stale custom summary is not saved with changed inputs')
+
+check(recommend.includes('function needScore'), 'rule recommendations score natural-language custom needs')
+check(recommend.includes('body.custom.flavors.join'), 'GLM recommendation prompt includes selected flavors')
 
 const authMiddleware = read('middleware/auth.global.ts')
 check(authMiddleware.includes('diet.isAuthenticated'), 'global auth middleware protects pages')

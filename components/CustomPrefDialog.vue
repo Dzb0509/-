@@ -21,6 +21,16 @@ const needs = ref('')
 const taboos = ref('')
 const loading = ref(false)
 const result = ref<CustomPref | null>(null)
+// 记录 AI 结果对应的输入快照。用户修改输入后，旧摘要不能继续和新条件一起保存。
+const generatedInputKey = ref('')
+
+function inputKey() {
+  return JSON.stringify({
+    flavors: [...flavors.value].sort(),
+    needs: needs.value.trim(),
+    taboos: taboos.value.trim()
+  })
+}
 
 watch(open, (v) => {
   if (v) {
@@ -28,8 +38,15 @@ watch(open, (v) => {
     needs.value = props.existing?.needs ?? ''
     taboos.value = props.existing?.taboos ?? ''
     result.value = props.existing?.summary ? props.existing : null
+    generatedInputKey.value = result.value ? inputKey() : ''
   }
 })
+
+watch([flavors, needs, taboos], () => {
+  if (result.value && generatedInputKey.value !== inputKey()) {
+    result.value = null
+  }
+}, { deep: true })
 
 function toggleFlavor(f: string) {
   const i = flavors.value.indexOf(f)
@@ -43,11 +60,18 @@ async function generate() {
     return
   }
   loading.value = true
+  const requestedKey = inputKey()
   try {
     result.value = await $fetch<CustomPref>(apiUrl('/api/customize'), {
       method: 'POST',
       body: { population: props.population, age: props.age, flavors: flavors.value, needs: needs.value, taboos: taboos.value }
     })
+    generatedInputKey.value = requestedKey
+    // 如果请求期间用户又改了输入，丢弃这次过期结果，避免错配。
+    if (requestedKey !== inputKey()) {
+      result.value = null
+      generatedInputKey.value = ''
+    }
   } catch {
     ElMessage.error('AI 生成失败，请稍后重试')
   } finally {
@@ -56,14 +80,15 @@ async function generate() {
 }
 
 function save() {
+  const generated = result.value && generatedInputKey.value === inputKey() ? result.value : null
   const pref: CustomPref = {
     flavors: flavors.value,
     needs: needs.value,
     taboos: taboos.value,
-    summary: result.value?.summary,
-    goodFor: result.value?.goodFor,
-    avoid: result.value?.avoid,
-    tips: result.value?.tips
+    summary: generated?.summary,
+    goodFor: generated?.goodFor,
+    avoid: generated?.avoid,
+    tips: generated?.tips
   }
   emit('save', pref)
   open.value = false

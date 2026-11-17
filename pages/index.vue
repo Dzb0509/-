@@ -33,7 +33,18 @@ const showCustom = ref(false)
 
 /** 当前请求条件的缓存 key（条件不变时直接展示上次结果，秒开） */
 const planKey = () =>
-  `${diet.syncVersion}|${diet.recommendationPopulation}|${dayMode.value}|${diet.profile.custom?.summary ?? ''}|${diet.yesterdayNames.length}`
+  `${diet.syncVersion}|${diet.recommendationPopulation}|${dayMode.value}|${customKey()}|${diet.yesterdayNames.length}`
+
+/** 以原始输入作为缓存指纹，不能只用 AI 摘要，否则不同输入可能复用旧餐单。 */
+function customKey() {
+  const custom = diet.profile.custom
+  if (!custom) return ''
+  return JSON.stringify({
+    flavors: [...(custom.flavors ?? [])].sort(),
+    needs: custom.needs?.trim() ?? '',
+    taboos: custom.taboos?.trim() ?? ''
+  })
+}
 
 /** 请求序号：快速连点时只让最新一次请求的结果生效（防旧响应覆盖新响应） */
 let reqSeq = 0

@@ -41,6 +41,24 @@ function tabooHit(d: Dish, taboos?: string): boolean {
     .some((t) => d.name.includes(t) || [...d.ingredients, ...d.steps].some((i) => i.includes(t)))
 }
 
+/** 将自然语言需求映射到菜品特征，规则兜底时也要遵守用户输入。 */
+function needScore(d: Dish, needs?: string): number {
+  if (!needs?.trim()) return 0
+  const text = `${d.name}|${d.region}|${d.flavors.join('|')}|${d.ingredients.join('|')}|${d.highlight}|${d.steps.join('|')}`
+  const rules = [
+    { keys: ['蛋白', '健身', '增肌', '训练'], terms: ['鸡', '牛', '鱼', '虾', '肉', '蛋', '豆腐', '豆制品', '酸奶'], score: 3 },
+    { keys: ['控糖', '低糖', '血糖', '低gi', '低 GI'], terms: ['杂粮', '燕麦', '藜麦', '荞麦', '全麦', '低糖', '无糖'], score: 3 },
+    { keys: ['减脂', '低脂', '控卡', '热量'], terms: ['清蒸', '清炒', '炖', '焯', '凉拌', '少油', '鸡胸', '鱼', '虾'], score: 2 },
+    { keys: ['低盐', '少盐', '高血压', '控钠'], terms: ['清蒸', '清淡', '原味', '少盐', '高钾'], score: 2 },
+    { keys: ['方便', '携带', '上班', '公司', '便当'], terms: ['三明治', '饭团', '卷', '便当', '沙拉', '煲仔饭'], score: 2 },
+    { keys: ['清淡', '少油', '易消化'], terms: ['清蒸', '清炒', '炖', '蒸蛋', '粥', '汤', '原味'], score: 2 }
+  ]
+  return rules.reduce((score, rule) => {
+    if (!rule.keys.some((key) => needs.toLowerCase().includes(key.toLowerCase()))) return score
+    return score + (rule.terms.some((term) => text.includes(term)) ? rule.score : 0)
+  }, 0)
+}
+
 function dishNameKey(name: string): string {
   return name.replace(/[（(][^）)]*[）)]/g, '').replace(/[\s·・、，,。！!？?]/g, '').toLowerCase()
 }
@@ -133,6 +151,8 @@ function rulePick(meal: MealKey, body: Body, exclude: Set<string>, role?: DishRo
     for (const f of d.flavors) s += (flavors[f as keyof typeof flavors] ?? 0) * 1.5
     // AI 自定义口味偏好加权
     for (const f of body.custom?.flavors ?? []) if (d.flavors.includes(f)) s += 1.2
+    // AI 自定义需求在无 Key/快速刷新时也必须生效
+    s += needScore(d, body.custom?.needs)
     const regions = body.taste?.regions ?? {}
     s += (regions[d.region] ?? 0) * 1.2
     // 昨天吃过的菜名降权
@@ -234,9 +254,16 @@ export default defineEventHandler(async (handler): Promise<RecommendResult> => {
       : ''
     return `${m.label || '成员'}（${m.age}岁，${p?.label ?? m.population}${custom}）`
   }
+  const customText = body.custom
+    ? [
+        body.custom.flavors?.length ? `口味偏好：${body.custom.flavors.join('、')}` : '',
+        body.custom.needs ? `需求：${body.custom.needs}` : '',
+        body.custom.taboos ? `忌口：${body.custom.taboos}` : ''
+      ].filter(Boolean).join('；')
+    : ''
   const userLabel = isFamily
     ? `一个 ${body.members!.length} 口之家：${body.members!.map(memberText).join('、')}`
-    : `${POP_MAP[pop]?.label ?? pop}人群${body.custom?.needs ? `（需求：${body.custom.needs}）` : ''}${body.custom?.taboos ? `，忌口：${body.custom.taboos}` : ''}`
+    : `${POP_MAP[pop]?.label ?? pop}人群${customText ? `（${customText}）` : ''}`
   const tasteText = [
     topEntries(body.taste?.flavors as unknown as Record<string, number> ?? {}, 3).join('、'),
     topEntries(body.taste?.regions ?? {}, 2).join('、')
@@ -247,7 +274,8 @@ export default defineEventHandler(async (handler): Promise<RecommendResult> => {
   const initialExclude = new Set([...DISHES, ...userDishes].filter(d => !allowed(d, body)).map(d => d.id))
   const ruleResponse = (): RecommendResult => {
     const used = new Set(initialExclude)
-    const result: RecommendResult = { source: 'rule', reason: '已按人群与忌口筛选，候选不足时保留空缺。', meals: {} }
+    const ruleConditions = customText ? `已按${customText}排序并避开忌口` : '已按人群与忌口筛选'
+    const result: RecommendResult = { source: 'rule', reason: `${ruleConditions}，候选不足时保留空缺。`, meals: {} }
     for (const meal of meals) {
       const picks = isFamily ? familyRuleSet(meal, body, used, userDishes) : rulePick(meal, body, used)
       picks.forEach(d => used.add(d.id))
@@ -272,7 +300,7 @@ export default defineEventHandler(async (handler): Promise<RecommendResult> => {
         2
       ).catch(() => [] as string[])
 
-      const baseSys = `你是营养师。${isFamily ? '这是家庭模式：一桌菜要尽量同时满足所有成员的营养需求（例如有孕妇就保证叶酸与优质蛋白、有老人就软烂低盐、有孩子就营养密度高且不太辣），并兼顾大人的口味。推荐理由只能基于上方实际给定的家庭成员构成，严禁虚构未提及的成员或需求。' : '根据用户画像挑选合适的菜。'}`
+      const baseSys = `你是营养师。${isFamily ? '这是家庭模式：一桌菜要尽量同时满足所有成员的营养需求（例如有孕妇就保证叶酸与优质蛋白、有老人就软烂低盐、有孩子就营养密度高且不太辣），并兼顾大人的口味。推荐理由只能基于上方实际给定的家庭成员构成，严禁虚构未提及的成员或需求。' : '根据用户画像挑选合适的菜。'}${customText ? ` 用户的自定义条件是【${customText}】，必须优先满足；忌口属于硬约束，口味和需求用于排序。` : ''}`
       const MEAL_LABEL: Record<MealKey, string> = { breakfast: '早餐', lunch: '午餐', dinner: '晚餐' }
 
       let glmReason = ''
@@ -382,7 +410,10 @@ export default defineEventHandler(async (handler): Promise<RecommendResult> => {
           }
           out.meals[meal] = picks
         }
-        return out
+        return {
+          ...out,
+          reason: `${customText ? `已按${customText}优先匹配。` : ''}${out.reason}`.slice(0, 160)
+        }
       }
       throw new Error('解析失败')
     } catch (err: any) {
