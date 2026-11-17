@@ -52,8 +52,7 @@ watch(imgUrl, (url) => {
   heroOk.value = true
   thumbLoaded.value = true
   heroLoaded.value = true
-  // 只有用户主动点击“换一张”时，才尝试网络候选图。
-  if (!altIdx.value) return
+  // 本机已有按菜名哈希缓存时，加载对应的实物图；没有精确缓存则保留专属图卡。
   const probe = new Image()
   probe.onload = () => {
     thumbSrc.value = url
