@@ -137,7 +137,7 @@ function eat() {
           :alt="dish.name"
           class="w-full h-full object-cover transition-opacity duration-500"
           :class="thumbLoaded ? 'opacity-100' : 'opacity-0'"
-          loading="lazy"
+          loading="eager"
           decoding="async"
           @load="thumbLoaded = true"
           @error="onThumbError"

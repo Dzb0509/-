@@ -97,7 +97,8 @@ onUnmounted(() => {
             :src="imgSrc[i]"
             :alt="s.title"
             class="absolute inset-0 w-full h-full object-cover"
-            loading="lazy"
+            loading="eager"
+            fetchpriority="high"
             @error="onImageError(i)"
           >
           <div v-else class="absolute inset-0 flex items-center justify-center text-6xl bg-gradient-to-br from-primary-100 to-primary-200">
