@@ -9,28 +9,28 @@ const slides = [
     title: '彩虹餐盘法则',
     text: '每餐凑齐 5 种颜色：红番茄、绿青菜、黄玉米、白鱼肉、黑木耳。颜色越丰富，植化素越全面，一顿饭就是一幅画。',
     img: '彩虹蔬菜沙拉餐盘',
-    fallback: '/hero-rainbow.svg'
+    fallback: '/hero-rainbow.jpg'
   },
   {
     emoji: '🧂',
     title: '高血压人群的控钠技巧',
     text: '限盐勺从 5g 开始；用香醋、柠檬、葱姜蒜提味代替一半盐；出锅前才放盐，咸味留在表面，减盐不减味。',
     img: '清蒸蔬菜拼盘健康餐',
-    fallback: '/hero-sodium.svg'
+    fallback: '/hero-sodium.jpg'
   },
   {
     emoji: '🥩',
     title: '优质蛋白怎么选',
     text: '鱼虾贝 > 禽肉 > 畜肉，蛋奶豆天天有。每餐一掌心的量，分散到三餐比一餐吃够更利于吸收。',
     img: '香煎鸡胸肉西兰花餐',
-    fallback: '/hero-protein.svg'
+    fallback: '/hero-protein.jpg'
   },
   {
     emoji: '🍚',
     title: '控糖先换主食',
     text: '白米饭掺 1/3 杂粮，血糖曲线更平稳；先吃菜再吃肉最后吃主食，餐后血糖能少爬一个坡。',
     img: '杂粮饭糙米饭健康主食',
-    fallback: '/hero-grains.svg'
+    fallback: '/hero-grains.jpg'
   }
 ]
 

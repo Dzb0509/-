@@ -25,7 +25,7 @@ async function submit() {
       <div class="text-center mb-7">
         <div class="mx-auto w-28 h-20 rounded-md overflow-hidden bg-celadon shadow-card">
           <img
-            src="/hero-rainbow.svg?v=20261117-1"
+            src="/hero-rainbow.jpg?v=20261117-2"
             alt="食刻彩虹餐盘"
             class="w-full h-full object-cover"
           >
