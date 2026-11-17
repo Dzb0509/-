@@ -38,6 +38,10 @@ check(vision.includes('region'), 'vision prompt and parser include cuisine')
 const card = read('components/FoodCard.vue')
 check(card.includes('v-model="food.region"'), 'food confirmation can edit region or flavor')
 
+const profileLogout = read('pages/profile.vue')
+check(profileLogout.includes('router.replace(\'/login\')'), 'logout replaces the authenticated route')
+check(profileLogout.includes('loggingOut'), 'logout button prevents duplicate clicks')
+
 const index = read('pages/index.vue')
 check(index.includes('watch(() => diet.syncVersion'), 'homepage refreshes after records sync')
 

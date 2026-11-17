@@ -9,6 +9,7 @@ const diet = useDietStore()
 const form = reactive({ ...diet.profile })
 const newUserName = ref('')
 const router = useRouter()
+const loggingOut = ref(false)
 
 const goalOptions = [
   { value: 'lose', label: '减脂' },
@@ -36,9 +37,19 @@ function switchActiveUser(id: string) {
   Object.assign(form, diet.profile)
 }
 
-function logout() {
+async function logout() {
+  if (loggingOut.value) return
+  loggingOut.value = true
   diet.logout()
-  router.push('/login')
+  await nextTick()
+  try {
+    await router.replace('/login')
+  } catch {
+    // 浏览器历史或旧版路由状态异常时，使用完整导航确保会话页面不再保留。
+    if (import.meta.client) window.location.replace('/login')
+  } finally {
+    loggingOut.value = false
+  }
 }
 
 watch(() => diet.activeUserId, () => Object.assign(form, diet.profile))
@@ -78,7 +89,9 @@ function save() {
       </div>
     </section>
 
-    <button class="w-full text-sm text-slate-400 hover:text-red-500" @click="logout">退出登录</button>
+    <button type="button" class="w-full text-sm text-slate-400 hover:text-red-500 disabled:opacity-50" :disabled="loggingOut" @click="logout">
+      {{ loggingOut ? '正在退出…' : '退出登录' }}
+    </button>
 
     <!-- 目标概览 -->
     <section class="card">
