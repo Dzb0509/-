@@ -28,6 +28,8 @@ const store = read('stores/diet.ts')
 check(store.includes('invalidateRecommendations()'), 'record changes invalidate recommendation cache')
 check(store.includes('syncFromStorage()'), 'cross-tab storage sync exists')
 check(store.includes('Number.isFinite'), 'daily goals tolerate legacy numeric values')
+check(store.includes('todayOverview()'), 'today totals and daily goals share one overview snapshot')
+check(store.includes('this.activeUserId = active.id'), 'storage sync repairs stale active user IDs')
 check(store.includes('RECOMMENDATION_CACHE_VERSION = 3'), 'stale recommendation cache is invalidated')
 check(store.includes('region: dish.region'), 'recommended dishes retain cuisine')
 check(store.includes('菜系:${f.region}'), 'taste profile learns cuisine')
@@ -64,6 +66,7 @@ check(authMiddleware.includes('diet.isAuthenticated'), 'global auth middleware p
 
 const profile = read('pages/profile.vue')
 check(profile.includes('aria-label="切换要编辑的用户"'), 'basic profile info has user switcher')
+check(profile.includes(':value="diet.todayOverview.totals.kcal"'), 'profile goals card reflects today totals')
 
 const family = read('pages/family.vue')
 check(family.includes('diet.cachePlan(planKey(), updated)'), 'family meal refresh persists the new plan')

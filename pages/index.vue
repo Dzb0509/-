@@ -137,7 +137,7 @@ const tasteTop = computed(() => ({
 }))
 
 const kcalPct = computed(() =>
-  diet.dailyGoals.kcal > 0 ? Math.round((diet.todayTotals.kcal / diet.dailyGoals.kcal) * 100) : 0
+  diet.todayOverview.goals.kcal > 0 ? Math.round((diet.todayOverview.totals.kcal / diet.todayOverview.goals.kcal) * 100) : 0
 )
 
 const greeting = computed(() => {
@@ -303,14 +303,14 @@ onMounted(() => {
           </div>
           <div class="flex items-center gap-5">
             <RingChart
-              :value="diet.todayTotals.kcal"
-              :max="diet.dailyGoals.kcal"
+              :value="diet.todayOverview.totals.kcal"
+              :max="diet.todayOverview.goals.kcal"
               label="热量"
               unit="kcal"
               :size="120"
             />
             <div class="flex-1">
-              <MacroBars :totals="diet.todayTotals" :goals="diet.dailyGoals" />
+              <MacroBars :totals="diet.todayOverview.totals" :goals="diet.todayOverview.goals" />
               <p class="text-[11px] text-slate-400 mt-2">
                 已完成 {{ kcalPct }}% · {{ diet.todayRecords.length }} 条记录
               </p>

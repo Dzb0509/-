@@ -98,6 +98,13 @@ export const useDietStore = defineStore('diet', {
       const foods = this.todayRecords.flatMap((r) => r.foods)
       return sumNutrition(foods)
     },
+    /** 今日概览使用的唯一数据快照，避免目标卡和首页分别读取不同状态。 */
+    todayOverview(): {
+      totals: { kcal: number; protein: number; fat: number; carb: number }
+      goals: { kcal: number; protein: number; fat: number; carb: number }
+    } {
+      return { totals: this.todayTotals, goals: this.dailyGoals }
+    },
     /** 每日营养目标：Mifflin-St Jeor 公式估算 BMR，活动系数 1.375，按目标微调 */
     dailyGoals(state): { kcal: number; protein: number; fat: number; carb: number } {
       const p = state.profile
@@ -252,12 +259,18 @@ export const useDietStore = defineStore('diet', {
     syncFromStorage() {
       const persisted = loadPersisted()
       if (!persisted) return
-      const users = (persisted.users as DietUser[] | undefined) ?? [{ id: 'u-default', profile: persisted.profile ?? this.profile, records: persisted.records ?? [] }]
+      const persistedUsers = (persisted.users as DietUser[] | undefined) ?? []
+      const users = persistedUsers.length
+        ? persistedUsers
+        : [{ id: 'u-default', profile: persisted.profile ?? this.profile, records: persisted.records ?? [] }]
       this.users = users
       this.authAccounts = (persisted.authAccounts ?? this.authAccounts) as AuthAccount[]
       this.authUserId = (persisted.authUserId ?? this.authUserId) as string | null
-      this.activeUserId = persisted.activeUserId ?? users[0].id
-      const active = users.find((u) => u.id === this.activeUserId) ?? users[0]
+      const requestedId = persisted.activeUserId ?? users[0].id
+      const active = users.find((u) => u.id === requestedId) ?? users[0]
+      // 旧数据或删除用户后可能留下失效的 activeUserId。必须回写有效 ID，
+      // 否则后续 persist() 无法把 profile/records 同步回正确用户。
+      this.activeUserId = active.id
       this.profile = active.profile
       this.records = active.records
       this.recommendationPopulation = persisted.recommendationPopulation ?? active.profile.population

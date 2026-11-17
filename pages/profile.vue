@@ -98,21 +98,21 @@ function save() {
       <h2 class="font-semibold mb-4">每日营养目标</h2>
       <div class="flex flex-col sm:flex-row items-center gap-6">
         <RingChart
-          :value="0"
-          :max="diet.dailyGoals.kcal"
-          label="热量目标"
+          :value="diet.todayOverview.totals.kcal"
+          :max="diet.todayOverview.goals.kcal"
+          label="今日热量"
           unit="kcal"
           :size="140"
         />
         <div class="flex-1 w-full">
           <MacroBars
-            :totals="{ protein: 0, fat: 0, carb: 0 }"
-            :goals="diet.dailyGoals"
+            :totals="diet.todayOverview.totals"
+            :goals="diet.todayOverview.goals"
           />
         </div>
       </div>
       <p class="text-[11px] text-slate-400 mt-3">
-        基于 Mifflin-St Jeor 公式估算基础代谢，按中等活动系数与你的目标调整；正式版将接入 AI 个性化解读。
+        今日摄入会和首页“今日概览”保持一致；目标基于 Mifflin-St Jeor 公式估算，并按中等活动系数与你的目标调整。
       </p>
     </section>
 
