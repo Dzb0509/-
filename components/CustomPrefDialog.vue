@@ -11,6 +11,7 @@ const props = defineProps<{
   existing?: CustomPref | null
 }>()
 const emit = defineEmits<{ save: [pref: CustomPref] }>()
+const apiUrl = useApiUrl()
 
 const FLAVOR_OPTIONS = ['清淡', '辣', '麻', '甜', '酸', '咸鲜', '酱香', '香辣']
 
@@ -43,7 +44,7 @@ async function generate() {
   }
   loading.value = true
   try {
-    result.value = await $fetch<CustomPref>('/api/customize', {
+    result.value = await $fetch<CustomPref>(apiUrl('/api/customize'), {
       method: 'POST',
       body: { population: props.population, age: props.age, flavors: flavors.value, needs: needs.value, taboos: taboos.value }
     })

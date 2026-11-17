@@ -3,6 +3,7 @@
  * 周报页：7 天真实记录趋势 + 本周饮食画像 + AI 周报总结（GLM 流式，真实数据驱动）
  */
 const diet = useDietStore()
+const apiUrl = useApiUrl()
 
 import { sumNutrition } from '~/types/diet'
 import { learnTaste, emptyTaste, topEntries } from '~/types/taste'
@@ -122,7 +123,7 @@ async function generate() {
   generating.value = true
   reportText.value = ''
   try {
-    await streamSSE('/api/report', {
+    await streamSSE(apiUrl('/api/report'), {
       nickname: diet.profile.nickname,
       populationLabel: POP_MAP[diet.profile.population]?.label ?? diet.profile.population,
       goal: diet.profile.goal,

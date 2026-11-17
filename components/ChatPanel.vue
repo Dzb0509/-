@@ -17,6 +17,7 @@ const input = ref('')
 const busy = ref(false)
 const listEl = ref<HTMLElement>()
 const diet = useDietStore()
+const apiUrl = useApiUrl()
 const chatStorageKey = computed(() => `shike-ai-chat-v1-${diet.activeUserId}`)
 
 function restoreChat() {
@@ -77,7 +78,7 @@ async function send(text?: string) {
 
   try {
     await streamSSE(
-      '/api/chat',
+      apiUrl('/api/chat'),
       {
         messages: messages.value.filter((m) => !m.streaming).map(({ role, text }) => ({ role, text })),
         context: {

@@ -4,6 +4,7 @@
  */
 const diet = useDietStore()
 const router = useRouter()
+const apiUrl = useApiUrl()
 
 import { sumNutrition } from '~/types/diet'
 
@@ -39,7 +40,7 @@ async function runComment() {
   aborter = new AbortController()
   try {
     await streamSSE(
-      '/api/comment',
+      apiUrl('/api/comment'),
       { foods: foodsRef.value },
       (e) => {
         if (e.type === 'stage') currentStage.value = 1

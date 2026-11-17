@@ -2,6 +2,11 @@
 export default defineNuxtConfig({
   buildDir: '.nuxt-fresh',
   compatibilityDate: '2026-10-27',
+  runtimeConfig: {
+    public: {
+      apiBase: process.env.NUXT_PUBLIC_API_BASE || ''
+    }
+  },
   // 纯 SPA 模式：营养分析工具重交互轻 SEO，关闭 SSR 简化部署
   ssr: false,
   devtools: { enabled: false },

@@ -11,6 +11,7 @@ const props = withDefaults(defineProps<{ dish: Dish; meal?: 'breakfast' | 'lunch
 const emit = defineEmits<{ eat: [dish: Dish] }>()
 
 const diet = useDietStore()
+const apiUrl = useApiUrl()
 const showDetail = ref(false)
 const eaten = ref(false)
 /** 图片加载状态（生成失败回退 emoji 占位；加载完成前显示骨架屏） */
@@ -27,7 +28,7 @@ const IMG_GLOBAL_VER = '20261030'
 
 const imgUrl = computed(
   () =>
-    `/api/dish-image?name=${encodeURIComponent(props.dish.name)}&v=${IMG_GLOBAL_VER}${altIdx.value ? `&alt=${altIdx.value}` : ''}`
+    `${apiUrl('/api/dish-image')}?name=${encodeURIComponent(props.dish.name)}&v=${IMG_GLOBAL_VER}${altIdx.value ? `&alt=${altIdx.value}` : ''}`
 )
 
 /** 换一张：优先走必应候选轮换（首次搜图约 3~8s，之后毫秒级）；失败回退 AI 重新生成 */
@@ -49,7 +50,7 @@ function regenImage() {
     thumbLoaded.value = true
     ElMessage.warning('没有找到更合适的图，稍后再试')
   }
-  probe.src = `/api/dish-image?name=${encodeURIComponent(props.dish.name)}&alt=${next}&t=${Date.now()}`
+  probe.src = `${apiUrl('/api/dish-image')}?name=${encodeURIComponent(props.dish.name)}&alt=${next}&t=${Date.now()}`
 }
 
 const flavorColors: Record<string, string> = {

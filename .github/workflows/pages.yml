@@ -19,6 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       NUXT_APP_BASE_URL: /-/
+      NUXT_PUBLIC_API_BASE: https://shike-ai-nutrition.frankfrog3.chatgpt.site
     steps:
       - name: Checkout
         uses: actions/checkout@v4

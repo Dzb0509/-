@@ -7,6 +7,7 @@ import type { Dish } from '~/types/recommend'
 
 const dishes = ref<Dish[]>([])
 const loading = ref(true)
+const apiUrl = useApiUrl()
 
 const REGIONS = ['全部', '川菜', '粤菜', '湘菜', '鲁菜', '苏浙菜', '闽菜', '徽菜', '东北菜', '西北面食', '湖北菜', '云南菜', '贵州菜', '京菜', '新疆菜', '客家菜', '赣菜', '广西菜', '本帮菜', '豫菜', '山西面食', '家常菜']
 const REGION_INTRO: Record<string, string> = {
@@ -43,7 +44,7 @@ const shown = computed(() =>
 async function load() {
   loading.value = true
   try {
-    const res = await $fetch<{ ok: boolean; dishes: Dish[] }>('/api/dishes')
+    const res = await $fetch<{ ok: boolean; dishes: Dish[] }>(apiUrl('/api/dishes'))
     dishes.value = res.dishes
   } finally {
     loading.value = false

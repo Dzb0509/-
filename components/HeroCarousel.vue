@@ -33,6 +33,7 @@ const slides = [
 const current = ref(0)
 const paused = ref(false)
 const imgOk = ref(slides.map(() => true))
+const apiUrl = useApiUrl()
 let timer: ReturnType<typeof setInterval> | null = null
 
 function go(i: number) {
@@ -76,7 +77,7 @@ onUnmounted(() => {
         <div class="hidden md:block relative bg-primary-50">
           <img
             v-if="imgOk[i]"
-            :src="`/api/dish-image?name=${encodeURIComponent(s.img)}&v=20261030`"
+            :src="`${apiUrl('/api/dish-image')}?name=${encodeURIComponent(s.img)}&v=20261030`"
             :alt="s.title"
             class="absolute inset-0 w-full h-full object-cover"
             loading="lazy"

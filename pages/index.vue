@@ -12,6 +12,7 @@ import { MEAL_LABELS, type MealType } from '~/types/diet'
 import { topEntries } from '~/types/taste'
 
 const diet = useDietStore()
+const apiUrl = useApiUrl()
 
 const MEALS: { key: 'breakfast' | 'lunch' | 'dinner'; emoji: string; hint: string }[] = [
   { key: 'breakfast', emoji: '🌅', hint: '开启一天代谢' },
@@ -48,7 +49,7 @@ async function fetchPlan(meals?: ('breakfast' | 'lunch' | 'dinner')[], opts?: { 
   if (meals?.length) refreshing.value = [...meals]
   else if (!opts?.silent) loading.value = true
   try {
-    const res = await $fetch<RecommendResult>('/api/recommend', {
+    const res = await $fetch<RecommendResult>(apiUrl('/api/recommend'), {
       method: 'POST',
       body: {
         population: diet.recommendationPopulation,

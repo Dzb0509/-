@@ -7,6 +7,7 @@ import { POPULATIONS, POP_GROUPS, POP_MAP, FAMILY_SET, DISH_ROLE_LABELS, DISH_RO
 import { MEAL_LABELS } from '~/types/diet'
 
 const diet = useDietStore()
+const apiUrl = useApiUrl()
 
 const MEALS = [
   { key: 'breakfast' as const, emoji: '🌅' },
@@ -116,7 +117,7 @@ async function fetchPlan(meals?: ('breakfast' | 'lunch' | 'dinner')[], opts?: { 
   if (meals?.length) refreshing.value = [...meals]
   else if (!opts?.silent) loading.value = true
   try {
-    const res = await $fetch<RecommendResult>('/api/recommend', {
+    const res = await $fetch<RecommendResult>(apiUrl('/api/recommend'), {
       method: 'POST',
       body: {
         members: diet.family,

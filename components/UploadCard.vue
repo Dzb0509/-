@@ -4,6 +4,7 @@
  */
 import type { FoodItem } from '~/types/diet'
 const diet = useDietStore()
+const apiUrl = useApiUrl()
 const props = withDefaults(defineProps<{ compact?: boolean }>(), { compact: false })
 const fileInput = ref<HTMLInputElement>()
 const dragging = ref(false)
@@ -35,7 +36,7 @@ async function handleFile(file: File) {
   loading.value = true
   try {
     preview.value = await compressImage(file)
-    const res = await $fetch<{ ok: boolean; source: string; foods: FoodItem[] }>('/api/vision', {
+    const res = await $fetch<{ ok: boolean; source: string; foods: FoodItem[] }>(apiUrl('/api/vision'), {
       method: 'POST',
       body: { image: preview.value, regionHint: foodHint.value }
     })
