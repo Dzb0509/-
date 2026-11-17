@@ -49,19 +49,41 @@ function decode(base64) {
   return bytes
 }
 
+function allowedOrigin(origin) {
+  return !origin
+    || origin === 'https://dzb0509.github.io'
+    || origin.startsWith('http://localhost:')
+    || origin.startsWith('http://127.0.0.1:')
+}
+
+function addCors(response, request) {
+  const origin = request.headers.get('origin')
+  if (!allowedOrigin(origin)) return response
+  const headers = new Headers(response.headers)
+  headers.set('Access-Control-Allow-Origin', origin || '*')
+  headers.set('Vary', 'Origin')
+  headers.set('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+  headers.set('Access-Control-Allow-Headers', 'Content-Type, Accept')
+  headers.set('Access-Control-Max-Age', '86400')
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers })
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url)
+    if (request.method === 'OPTIONS') {
+      return addCors(new Response(null, { status: 204 }), request)
+    }
     const asset = assets[url.pathname]
     if (asset && (request.method === 'GET' || request.method === 'HEAD')) {
-      return new Response(request.method === 'HEAD' ? null : decode(asset.body), {
+      return addCors(new Response(request.method === 'HEAD' ? null : decode(asset.body), {
         headers: {
           'content-type': asset.type,
           'cache-control': url.pathname.startsWith('/_nuxt/') ? 'public, max-age=31536000, immutable' : 'public, max-age=3600'
         }
-      })
+      }), request)
     }
-    return worker.fetch(request, env, ctx)
+    return addCors(await worker.fetch(request, env, ctx), request)
   }
 }
 `
