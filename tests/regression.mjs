@@ -44,6 +44,11 @@ check(recommend.includes('放宽“本次不重复”约束'), 'recommendation r
 const card = read('components/FoodCard.vue')
 check(card.includes('v-model="food.region"'), 'food confirmation can edit region or flavor')
 
+const chat = read('components/ChatPanel.vue')
+check(chat.includes('function persistChat()'), 'chat history has an explicit persistence path')
+check(chat.includes('const reply = messages.value[messages.value.length - 1]'), 'chat streams into a reactive message proxy')
+check(chat.includes('persistChat()'), 'chat persists the final assistant reply')
+
 const profileLogout = read('pages/profile.vue')
 check(profileLogout.includes('router.replace(\'/login\')'), 'logout replaces the authenticated route')
 check(profileLogout.includes('loggingOut'), 'logout button prevents duplicate clicks')

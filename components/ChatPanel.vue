@@ -42,14 +42,20 @@ function addWelcome() {
   })
 }
 
+function persistChat() {
+  if (!import.meta.client) return
+  try {
+    localStorage.setItem(chatStorageKey.value, JSON.stringify(messages.value.filter((m) => !m.streaming).slice(-50)))
+  } catch { /* 存储空间不足不影响当前对话 */ }
+}
+
 onMounted(() => { restoreChat(); addWelcome() })
 watch(() => diet.activeUserId, () => { restoreChat(); addWelcome() })
 
 watch(messages, (value) => {
-  if (!import.meta.client) return
-  try {
-    localStorage.setItem(chatStorageKey.value, JSON.stringify(value.filter((m) => !m.streaming).slice(-50)))
-  } catch { /* 存储空间不足不影响当前对话 */ }
+  // 监听保留 value 参数，确保用户消息和 AI 流式消息都能在深度变化时落盘。
+  void value
+  persistChat()
 }, { deep: true })
 
 function clearChat() {
@@ -72,8 +78,10 @@ async function send(text?: string) {
   busy.value = true
   messages.value.push({ role: 'user', text: content })
 
-  const reply: ChatMsg = { role: 'assistant', text: '', tools: [], streaming: true }
-  messages.value.push(reply)
+  messages.value.push({ role: 'assistant', text: '', tools: [], streaming: true })
+  // 从响应式数组取回代理对象。直接修改 push 前的普通对象不会触发 Vue 深度监听，
+  // 这会导致用户消息已保存，但 AI 回复仍被 streaming 过滤掉。
+  const reply = messages.value[messages.value.length - 1]
   scrollBottom()
 
   try {
@@ -98,6 +106,8 @@ async function send(text?: string) {
     reply.text = '网络异常，请稍后重试。'
   } finally {
     reply.streaming = false
+    // 流结束后立即保存一次，即使本次回复没有产生文本或组件即将离开页面。
+    persistChat()
     busy.value = false
     scrollBottom()
   }
