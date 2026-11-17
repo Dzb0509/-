@@ -138,7 +138,14 @@ async function fetchPlan(meals?: ('breakfast' | 'lunch' | 'dinner')[], opts?: { 
         source: res.source,
         meals: { ...plan.value.meals }
       }
-      for (const m of meals) updated.meals[m] = res.meals[m] ?? []
+      for (const m of meals) {
+        const refreshed = res.meals[m]
+        if (refreshed?.length) updated.meals[m] = refreshed
+        else {
+          updated.meals[m] = plan.value.meals[m] ?? []
+          ElMessage.info('当前家庭组合可替换菜品不足，已保留当前餐单')
+        }
+      }
       plan.value = updated
       diet.cachePlan(planKey(), updated)
     } else {
