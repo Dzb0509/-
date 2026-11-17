@@ -23,3 +23,6 @@ shike-site-*.tar.gz
 .nuxt-fresh/
 .nuxt-production/
 .output-production/
+
+# 本地生成的文档和渲染校验产物
+outputs/
