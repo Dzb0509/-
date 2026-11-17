@@ -36,16 +36,41 @@ const REGION_INTRO: Record<string, string> = {
 }
 
 const active = ref('全部')
+/** 当前地区的展示顺序。地方特色不是一次性静态列表，重复点击可继续换一批。 */
+const displayOrder = ref<string[]>([])
 
 const shown = computed(() =>
-  active.value === '全部' ? dishes.value : dishes.value.filter((d) => d.region === active.value)
+  (() => {
+    const pool = active.value === '全部' ? dishes.value : dishes.value.filter((d) => d.region === active.value)
+    const byId = new Map(pool.map((d) => [d.id, d]))
+    const ordered = displayOrder.value.filter((id) => byId.has(id)).map((id) => byId.get(id)!)
+    return [...ordered, ...pool.filter((d) => !displayOrder.value.includes(d.id))]
+  })()
 )
+
+function reshuffle() {
+  const pool = active.value === '全部' ? dishes.value : dishes.value.filter((d) => d.region === active.value)
+  if (pool.length < 2) return
+  const current = shown.value.length ? shown.value : pool
+  // 轮换一个随机偏移，避免连续点击时第一批菜永远不动；不修改菜品数据本身。
+  const offset = 1 + Math.floor(Math.random() * (current.length - 1))
+  const rotated = [...current.slice(offset), ...current.slice(0, offset)]
+  displayOrder.value = rotated.map((d) => d.id)
+}
+
+function selectRegion(region: string) {
+  const sameRegion = active.value === region
+  active.value = region
+  if (sameRegion) reshuffle()
+  else displayOrder.value = []
+}
 
 async function load() {
   loading.value = true
   try {
     const res = await $fetch<{ ok: boolean; dishes: Dish[] }>(apiUrl('/api/dishes'))
     dishes.value = res.dishes
+    displayOrder.value = []
   } finally {
     loading.value = false
   }
@@ -57,10 +82,21 @@ onMounted(load)
 <template>
   <div class="space-y-6">
     <header>
-      <h1 class="text-2xl font-bold tracking-tight">🗺️ 地方特色 · 健康吃遍中国</h1>
-      <p class="text-sm text-slate-400 mt-1">
-        {{ REGION_INTRO[active] }} · 每道菜都是经过营养优化的版本，点击卡片可看做法
-      </p>
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <h1 class="text-2xl font-bold tracking-tight">🗺️ 地方特色 · 健康吃遍中国</h1>
+          <p class="text-sm text-slate-400 mt-1">
+            {{ REGION_INTRO[active] }} · 每道菜都是经过营养优化的版本，点击卡片可看做法
+          </p>
+        </div>
+        <button
+          class="btn-secondary shrink-0 !py-2 !px-3 text-sm"
+          :disabled="loading || shown.length < 2"
+          @click="reshuffle"
+        >
+          换一批 ⟳
+        </button>
+      </div>
     </header>
 
     <!-- 地区切换 -->
@@ -72,7 +108,7 @@ onMounted(load)
         :class="active === r
           ? 'bg-primary-500 border-primary-500 text-white'
           : 'bg-white border-slate-200 text-slate-500 hover:border-primary-300 hover:text-primary-600'"
-        @click="active = r"
+        @click="selectRegion(r)"
       >
         {{ r }}
       </button>

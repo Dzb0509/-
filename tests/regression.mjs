@@ -13,7 +13,7 @@ for (const file of ['server/api/vision.post.ts', 'server/api/comment.post.ts', '
   check(true, `${file} TypeScript syntax`)
 }
 
-for (const file of ['app.vue', 'components/FoodCard.vue', 'pages/index.vue', 'pages/family.vue', 'pages/report.vue', 'pages/login.vue', 'pages/onboarding.vue', 'pages/profile.vue', 'pages/analyze.vue']) {
+for (const file of ['app.vue', 'components/FoodCard.vue', 'pages/index.vue', 'pages/explore.vue', 'pages/family.vue', 'pages/report.vue', 'pages/login.vue', 'pages/onboarding.vue', 'pages/profile.vue', 'pages/analyze.vue']) {
   const source = read(file)
   const parsed = parse(source, { filename: file })
   check(parsed.errors.length === 0, `${file} SFC parse`)
@@ -61,6 +61,10 @@ check(index.includes('diet.cachePlan(planKey(), updated)'), 'homepage meal refre
 check(index.includes('hasCompleteMeals'), 'homepage ignores incomplete cached meal plans')
 check(index.includes('timeout: 15000'), 'homepage refresh reports stalled requests')
 check(index.includes('以原始输入作为缓存指纹'), 'custom recommendation cache uses raw inputs')
+
+const explore = read('pages/explore.vue')
+check(explore.includes('function reshuffle()'), 'regional dishes can be reshuffled repeatedly')
+check(explore.includes('if (sameRegion) reshuffle()'), 'clicking the active region triggers a new batch')
 
 const customDialog = read('components/CustomPrefDialog.vue')
 check(customDialog.includes('generatedInputKey'), 'custom AI result is tied to its input snapshot')
