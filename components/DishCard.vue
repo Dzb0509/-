@@ -12,7 +12,6 @@ const emit = defineEmits<{ eat: [dish: Dish] }>()
 
 const diet = useDietStore()
 const apiUrl = useApiUrl()
-const assetUrl = useAssetUrl()
 const showDetail = ref(false)
 const eaten = ref(false)
 /** 图片加载状态（生成失败回退 emoji 占位；加载完成前显示骨架屏） */
@@ -23,13 +22,16 @@ const heroLoaded = ref(false)
 /** 「换一张」轮换计数（alt=N 从必应网络图候选轮换，URL 版本号防浏览器缓存） */
 const altIdx = ref(0)
 const regenerating = ref(false)
-/** 首屏使用随应用发布的实物图，避免未经核验的网络候选图覆盖菜品。 */
+/**
+ * 未通过菜名核验的网络图不能冒充菜品图。
+ * 本地先生成带菜名的专属图卡，避免把另一道菜的照片展示给用户。
+ */
 const fallbackImgUrl = computed(() => {
-  const name = props.dish.name
-  if (/[鸡鸭鹅禽肉|鸡翅|鸡腿|鸡胸|牛肉|猪肉|羊肉|肉丝|排骨]/.test(name)) return assetUrl('/hero-protein.jpg')
-  if (/[鱼虾蟹贝|海鲜|三文鱼|鲈鱼|带鱼|虾仁|扇贝]/.test(name)) return assetUrl('/hero-sodium.jpg')
-  if (/[饭|面|粉|粥|藜麦|杂粮|主食|饼]/.test(name)) return assetUrl('/hero-grains.jpg')
-  return assetUrl('/hero-rainbow.jpg')
+  const name = props.dish.name.slice(0, 24)
+  const emoji = /[鱼虾蟹贝|海鲜]/.test(name) ? '🐟' : /[鸡鸭鹅|牛肉|猪肉|羊肉|排骨]/.test(name) ? '🍗' : /[饭面粉粥饼]/.test(name) ? '🍚' : '🥗'
+  const escapeXml = (value: string) => value.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[char] ?? char))
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 420"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#e9f8f1"/><stop offset="1" stop-color="#c6e9dc"/></linearGradient></defs><rect width="600" height="420" fill="url(#g)"/><circle cx="300" cy="190" r="110" fill="#fff" opacity=".9"/><text x="300" y="225" text-anchor="middle" font-size="92">${emoji}</text><text x="300" y="355" text-anchor="middle" fill="#176b54" font-size="28" font-family="Microsoft YaHei,sans-serif">${escapeXml(name)}</text><text x="300" y="385" text-anchor="middle" fill="#5f8f7e" font-size="16" font-family="Microsoft YaHei,sans-serif">待核验的菜品实拍图</text></svg>`
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`
 })
 
 /** 全局图片版本号：批量替换缓存图后递增，强制浏览器丢弃旧图缓存 */
@@ -78,26 +80,9 @@ function onHeroError() {
   heroOk.value = false
 }
 
-/** 换一张：优先走必应候选轮换（首次搜图约 3~8s，之后毫秒级）；失败回退 AI 重新生成 */
+/** 只有通过菜名核验的图片才允许替换；当前本地版先保持专属图卡。 */
 function regenImage() {
-  if (regenerating.value) return
-  regenerating.value = true
-  thumbOk.value = true
-  thumbLoaded.value = false
-  const next = altIdx.value + 1
-  const probe = new Image()
-  probe.onload = () => {
-    regenerating.value = false
-    altIdx.value = next
-    thumbLoaded.value = true
-    ElMessage.success(`已换一张「${props.dish.name}」的图片`)
-  }
-  probe.onerror = () => {
-    regenerating.value = false
-    thumbLoaded.value = true
-    ElMessage.warning('没有找到更合适的图，稍后再试')
-  }
-  probe.src = `${apiUrl('/api/dish-image')}?name=${encodeURIComponent(props.dish.name)}&alt=${next}&t=${Date.now()}`
+  ElMessage.info(`「${props.dish.name}」当前显示专属图卡，避免使用未经核验的错图`)
 }
 
 const flavorColors: Record<string, string> = {
