@@ -8,25 +8,29 @@ const slides = [
     emoji: '🌈',
     title: '彩虹餐盘法则',
     text: '每餐凑齐 5 种颜色：红番茄、绿青菜、黄玉米、白鱼肉、黑木耳。颜色越丰富，植化素越全面，一顿饭就是一幅画。',
-    img: '彩虹蔬菜沙拉餐盘'
+    img: '彩虹蔬菜沙拉餐盘',
+    fallback: '/hero-rainbow.svg'
   },
   {
     emoji: '🧂',
     title: '高血压人群的控钠技巧',
     text: '限盐勺从 5g 开始；用香醋、柠檬、葱姜蒜提味代替一半盐；出锅前才放盐，咸味留在表面，减盐不减味。',
-    img: '清蒸蔬菜拼盘健康餐'
+    img: '清蒸蔬菜拼盘健康餐',
+    fallback: '/hero-sodium.svg'
   },
   {
     emoji: '🥩',
     title: '优质蛋白怎么选',
     text: '鱼虾贝 > 禽肉 > 畜肉，蛋奶豆天天有。每餐一掌心的量，分散到三餐比一餐吃够更利于吸收。',
-    img: '香煎鸡胸肉西兰花餐'
+    img: '香煎鸡胸肉西兰花餐',
+    fallback: '/hero-protein.svg'
   },
   {
     emoji: '🍚',
     title: '控糖先换主食',
     text: '白米饭掺 1/3 杂粮，血糖曲线更平稳；先吃菜再吃肉最后吃主食，餐后血糖能少爬一个坡。',
-    img: '杂粮饭糙米饭健康主食'
+    img: '杂粮饭糙米饭健康主食',
+    fallback: '/hero-grains.svg'
   }
 ]
 
@@ -34,7 +38,19 @@ const current = ref(0)
 const paused = ref(false)
 const imgOk = ref(slides.map(() => true))
 const apiUrl = useApiUrl()
+const assetUrl = useAssetUrl()
+const imgSrc = ref(slides.map((s) => `${apiUrl('/api/dish-image')}?name=${encodeURIComponent(s.img)}&v=20261030`))
+const remoteFailed = ref(slides.map(() => false))
 let timer: ReturnType<typeof setInterval> | null = null
+
+function onImageError(i: number) {
+  if (!remoteFailed.value[i]) {
+    remoteFailed.value[i] = true
+    imgSrc.value[i] = assetUrl(slides[i].fallback)
+    return
+  }
+  imgOk.value[i] = false
+}
 
 function go(i: number) {
   current.value = (i + slides.length) % slides.length
@@ -77,11 +93,11 @@ onUnmounted(() => {
         <div class="hidden md:block relative bg-primary-50">
           <img
             v-if="imgOk[i]"
-            :src="`${apiUrl('/api/dish-image')}?name=${encodeURIComponent(s.img)}&v=20261030`"
+            :src="imgSrc[i]"
             :alt="s.title"
             class="absolute inset-0 w-full h-full object-cover"
             loading="lazy"
-            @error="imgOk[i] = false"
+            @error="onImageError(i)"
           >
           <div v-else class="absolute inset-0 flex items-center justify-center text-6xl bg-gradient-to-br from-primary-100 to-primary-200">
             {{ s.emoji }}

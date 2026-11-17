@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 600">
+  <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#e9f8f1"/><stop offset="1" stop-color="#b8e8d2"/></linearGradient></defs>
+  <rect width="900" height="600" fill="url(#bg)"/>
+  <circle cx="450" cy="310" r="190" fill="#fff" opacity=".95"/>
+  <circle cx="450" cy="310" r="165" fill="#d7f2e5"/>
+  <g font-size="80" text-anchor="middle"><text x="350" y="265">🍅</text><text x="540" y="255">🥦</text><text x="330" y="405">🌽</text><text x="520" y="405">🥕</text><text x="450" y="330">🥗</text></g>
+  <text x="450" y="555" fill="#0d6b52" font-size="28" font-family="Microsoft YaHei, sans-serif" text-anchor="middle">彩虹餐盘 · 每餐五种颜色</text>
+</svg>

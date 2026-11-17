@@ -12,6 +12,7 @@ const emit = defineEmits<{ eat: [dish: Dish] }>()
 
 const diet = useDietStore()
 const apiUrl = useApiUrl()
+const assetUrl = useAssetUrl()
 const showDetail = ref(false)
 const eaten = ref(false)
 /** 图片加载状态（生成失败回退 emoji 占位；加载完成前显示骨架屏） */
@@ -22,6 +23,7 @@ const heroLoaded = ref(false)
 /** 「换一张」轮换计数（alt=N 从必应网络图候选轮换，URL 版本号防浏览器缓存） */
 const altIdx = ref(0)
 const regenerating = ref(false)
+const fallbackImgUrl = assetUrl('/dish-placeholder.svg')
 
 /** 全局图片版本号：批量替换缓存图后递增，强制浏览器丢弃旧图缓存 */
 const IMG_GLOBAL_VER = '20261030'
@@ -30,6 +32,35 @@ const imgUrl = computed(
   () =>
     `${apiUrl('/api/dish-image')}?name=${encodeURIComponent(props.dish.name)}&v=${IMG_GLOBAL_VER}${altIdx.value ? `&alt=${altIdx.value}` : ''}`
 )
+const thumbSrc = ref('')
+const heroSrc = ref('')
+
+watch(imgUrl, (url) => {
+  thumbSrc.value = url
+  heroSrc.value = url
+  thumbOk.value = true
+  heroOk.value = true
+  thumbLoaded.value = false
+  heroLoaded.value = false
+}, { immediate: true })
+
+function onThumbError() {
+  if (thumbSrc.value !== fallbackImgUrl) {
+    thumbSrc.value = fallbackImgUrl
+    thumbLoaded.value = true
+    return
+  }
+  thumbOk.value = false
+}
+
+function onHeroError() {
+  if (heroSrc.value !== fallbackImgUrl) {
+    heroSrc.value = fallbackImgUrl
+    heroLoaded.value = true
+    return
+  }
+  heroOk.value = false
+}
 
 /** 换一张：优先走必应候选轮换（首次搜图约 3~8s，之后毫秒级）；失败回退 AI 重新生成 */
 function regenImage() {
@@ -95,14 +126,14 @@ function eat() {
         <div v-if="thumbOk && !thumbLoaded" class="absolute inset-0 animate-pulse bg-slate-200" />
         <img
           v-if="thumbOk"
-          :src="imgUrl"
+          :src="thumbSrc"
           :alt="dish.name"
           class="w-full h-full object-cover transition-opacity duration-500"
           :class="thumbLoaded ? 'opacity-100' : 'opacity-0'"
           loading="lazy"
           decoding="async"
           @load="thumbLoaded = true"
-          @error="thumbOk = false"
+          @error="onThumbError"
         >
         <div v-if="!thumbOk" class="w-full h-full flex items-center justify-center text-2xl">🍽️</div>
         <!-- 换一张：轮换必应网络图候选 -->
@@ -153,13 +184,13 @@ function eat() {
           <div v-if="heroOk && !heroLoaded" class="absolute inset-0 animate-pulse bg-slate-200" />
           <img
             v-if="heroOk"
-            :src="imgUrl"
+            :src="heroSrc"
             :alt="dish.name"
             class="w-full h-full object-cover transition-opacity duration-500"
             :class="heroLoaded ? 'opacity-100' : 'opacity-0'"
             decoding="async"
             @load="heroLoaded = true"
-            @error="heroOk = false"
+            @error="onHeroError"
           >
           <div v-if="!heroOk" class="w-full h-full flex items-center justify-center text-6xl bg-gradient-to-br from-primary-50 to-primary-100">🍽️</div>
           <div class="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/55 to-transparent px-4 pb-2.5 pt-8 flex items-end justify-between">

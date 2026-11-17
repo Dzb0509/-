@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 600">
+  <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fffbe8"/><stop offset="1" stop-color="#f4dda0"/></linearGradient></defs>
+  <rect width="900" height="600" fill="url(#bg)"/>
+  <ellipse cx="450" cy="365" rx="235" ry="100" fill="#fff" opacity=".96"/>
+  <ellipse cx="450" cy="350" rx="205" ry="70" fill="#e3c27e"/>
+  <g font-size="92" text-anchor="middle"><text x="350" y="365">🍚</text><text x="520" y="360">🌾</text><text x="440" y="245">🌽</text></g>
+  <text x="450" y="555" fill="#806523" font-size="28" font-family="Microsoft YaHei, sans-serif" text-anchor="middle">杂粮主食 · 稳定能量慢慢来</text>
+</svg>

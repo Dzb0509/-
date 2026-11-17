@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600">
+  <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#e9f8f1"/><stop offset="1" stop-color="#c6e9dc"/></linearGradient></defs>
+  <rect width="600" height="600" rx="36" fill="url(#bg)"/>
+  <circle cx="300" cy="285" r="170" fill="#fff" opacity=".92"/>
+  <circle cx="300" cy="285" r="132" fill="#e7f5ee" stroke="#8ac9ae" stroke-width="8"/>
+  <g font-size="112" text-anchor="middle"><text x="230" y="310">🥗</text><text x="385" y="310">🍽️</text></g>
+  <text x="300" y="500" fill="#237455" font-size="28" font-family="Microsoft YaHei, sans-serif" text-anchor="middle">食刻菜品图</text>
+</svg>
