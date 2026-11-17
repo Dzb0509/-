@@ -119,6 +119,7 @@ async function fetchPlan(meals?: ('breakfast' | 'lunch' | 'dinner')[], opts?: { 
   try {
     const res = await $fetch<RecommendResult>(apiUrl('/api/recommend'), {
       method: 'POST',
+      timeout: 20000,
       body: {
         members: diet.family,
         day: 'today',

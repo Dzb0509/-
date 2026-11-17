@@ -270,11 +270,11 @@ export const useDietStore = defineStore('diet', {
     startAnalysis(image: string, foods: FoodItem[]) {
       this.pending = { image, foods }
     },
-    confirmPending(): FoodRecord | null {
+    confirmPending(meal: FoodRecord['meal'] = guessMeal()): FoodRecord | null {
       if (!this.pending) return null
       const record: FoodRecord = {
         id: `r-${Date.now()}`,
-        meal: guessMeal(),
+        meal,
         time: Date.now(),
         image: this.pending.image,
         foods: this.pending.foods

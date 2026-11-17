@@ -6,7 +6,7 @@ const diet = useDietStore()
 const router = useRouter()
 const apiUrl = useApiUrl()
 
-import { sumNutrition } from '~/types/diet'
+import { MEAL_LABELS, guessMeal, sumNutrition, type MealType } from '~/types/diet'
 
 const stages = ['视觉识别', '检索膳食指南', '生成点评']
 const currentStage = ref(0)
@@ -16,6 +16,7 @@ const commenting = ref(true)
 const commentDone = ref(false)
 const streamError = ref(false)
 const addFoodDialog = ref(false)
+const selectedMeal = ref<MealType>(guessMeal())
 const newFood = reactive({
   name: '',
   region: '未标注',
@@ -108,7 +109,7 @@ async function addFood() {
 }
 
 function confirm() {
-  const record = diet.confirmPending()
+  const record = diet.confirmPending(selectedMeal.value)
   if (record) {
     ElMessage.success('已记录这一餐 🎉')
     router.push('/record')
@@ -201,6 +202,18 @@ onUnmounted(() => aborter?.abort())
           editable
           @remove="diet.pending!.foods.splice(i, 1)"
         />
+      </section>
+
+      <section class="card !p-4">
+        <div class="flex items-center justify-between gap-3 mb-2">
+          <h2 class="font-semibold text-sm">记录到哪一餐</h2>
+          <span class="text-[11px] text-slate-400">可手动修正，避免晚餐被归到加餐</span>
+        </div>
+        <el-radio-group v-model="selectedMeal" class="flex flex-wrap gap-2">
+          <el-radio-button v-for="meal in (['breakfast', 'lunch', 'dinner', 'snack'] as MealType[])" :key="meal" :value="meal">
+            {{ MEAL_LABELS[meal] }}
+          </el-radio-button>
+        </el-radio-group>
       </section>
 
       <!-- AI 流式点评 -->

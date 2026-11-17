@@ -13,7 +13,7 @@ for (const file of ['server/api/vision.post.ts', 'server/api/comment.post.ts', '
   check(true, `${file} TypeScript syntax`)
 }
 
-for (const file of ['app.vue', 'components/FoodCard.vue', 'pages/index.vue', 'pages/family.vue', 'pages/report.vue', 'pages/login.vue', 'pages/onboarding.vue', 'pages/profile.vue']) {
+for (const file of ['app.vue', 'components/FoodCard.vue', 'pages/index.vue', 'pages/family.vue', 'pages/report.vue', 'pages/login.vue', 'pages/onboarding.vue', 'pages/profile.vue', 'pages/analyze.vue']) {
   const source = read(file)
   const parsed = parse(source, { filename: file })
   check(parsed.errors.length === 0, `${file} SFC parse`)
@@ -33,6 +33,7 @@ check(store.includes('region: dish.region'), 'recommended dishes retain cuisine'
 check(store.includes('菜系:${f.region}'), 'taste profile learns cuisine')
 check(store.includes('async registerAccount(account: string, password: string)'), 'local account registration exists')
 check(store.includes('completeOnboarding(data: Pick<UserProfile'), 'first-use onboarding persists profile')
+check(store.includes("confirmPending(meal: FoodRecord['meal'] = guessMeal())"), 'recognition result can save an explicit meal')
 
 const vision = read('server/api/vision.post.ts')
 check(vision.includes('region'), 'vision prompt and parser include cuisine')
@@ -51,6 +52,7 @@ const index = read('pages/index.vue')
 check(index.includes('watch(() => diet.syncVersion'), 'homepage refreshes after records sync')
 check(index.includes('diet.cachePlan(planKey(), updated)'), 'homepage meal refresh persists the new plan')
 check(index.includes('hasCompleteMeals'), 'homepage ignores incomplete cached meal plans')
+check(index.includes('timeout: 15000'), 'homepage refresh reports stalled requests')
 
 const authMiddleware = read('middleware/auth.global.ts')
 check(authMiddleware.includes('diet.isAuthenticated'), 'global auth middleware protects pages')
@@ -60,6 +62,10 @@ check(profile.includes('aria-label="切换要编辑的用户"'), 'basic profile 
 
 const family = read('pages/family.vue')
 check(family.includes('diet.cachePlan(planKey(), updated)'), 'family meal refresh persists the new plan')
+check(family.includes('timeout: 20000'), 'family refresh reports stalled requests')
+
+const analyze = read('pages/analyze.vue')
+check(analyze.includes('记录到哪一餐'), 'recognition result exposes meal selector')
 
 const dietSync = read('plugins/diet-sync.client.ts')
 check(dietSync.includes('diet.syncFromStorage()'), 'diet store syncs on app startup')

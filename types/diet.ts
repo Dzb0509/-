@@ -89,6 +89,7 @@ export function guessMeal(): MealType {
   const h = new Date().getHours()
   if (h < 10) return 'breakfast'
   if (h < 14) return 'lunch'
-  if (h < 21) return 'dinner'
+  // 晚餐通常持续到 23 点；识餐结果页仍提供手动餐次选择，避免跨时段误归类。
+  if (h < 23) return 'dinner'
   return 'snack'
 }
