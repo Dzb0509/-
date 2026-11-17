@@ -16,6 +16,9 @@ const DEFAULT_PROFILE: UserProfile = {
   population: 'balance' as PopulationId
 }
 
+// 菜库和刷新策略变化后，旧缓存可能包含空餐次，直接丢弃并重新生成。
+const RECOMMENDATION_CACHE_VERSION = 3
+
 export interface DietUser {
   id: string
   profile: UserProfile
@@ -77,7 +80,7 @@ export const useDietStore = defineStore('diet', {
       /** 用户上传的家传菜谱（参与全家推荐） */
       userRecipes: (persisted?.userRecipes ?? []) as UserRecipe[],
       /** 推荐结果缓存（按请求条件做 key）：进页面先展示上次结果再后台刷新，免骨架屏等待 */
-      planCache: (persisted?.recommendationCacheVersion === 2 ? persisted.planCache ?? {} : {}) as Record<string, RecommendResult>
+      planCache: (persisted?.recommendationCacheVersion === RECOMMENDATION_CACHE_VERSION ? persisted.planCache ?? {} : {}) as Record<string, RecommendResult>
     }
   },
 
@@ -355,7 +358,7 @@ export const useDietStore = defineStore('diet', {
       // 照片仅用于本次识别，持久化营养与菜品元数据，避免 base64 撑满配额。
       this.syncActiveUser()
       const users = this.users.map((user) => ({ ...user, records: user.records.map(({ image, ...record }) => record) }))
-      const data = { recommendationCacheVersion: 2, users, activeUserId: this.activeUserId, authAccounts: this.authAccounts, authUserId: this.authUserId, recommendationPopulation: this.recommendationPopulation, records: this.records.map(({ image, ...record }) => record), profile: this.profile, family: this.family, userRecipes: this.userRecipes, planCache: this.planCache }
+      const data = { recommendationCacheVersion: RECOMMENDATION_CACHE_VERSION, users, activeUserId: this.activeUserId, authAccounts: this.authAccounts, authUserId: this.authUserId, recommendationPopulation: this.recommendationPopulation, records: this.records.map(({ image, ...record }) => record), profile: this.profile, family: this.family, userRecipes: this.userRecipes, planCache: this.planCache }
       try {
         localStorage.setItem(DIET_STORAGE_KEY, JSON.stringify(data))
         this.storageError = ''

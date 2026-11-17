@@ -28,6 +28,7 @@ const store = read('stores/diet.ts')
 check(store.includes('invalidateRecommendations()'), 'record changes invalidate recommendation cache')
 check(store.includes('syncFromStorage()'), 'cross-tab storage sync exists')
 check(store.includes('Number.isFinite'), 'daily goals tolerate legacy numeric values')
+check(store.includes('RECOMMENDATION_CACHE_VERSION = 3'), 'stale recommendation cache is invalidated')
 check(store.includes('region: dish.region'), 'recommended dishes retain cuisine')
 check(store.includes('菜系:${f.region}'), 'taste profile learns cuisine')
 check(store.includes('async registerAccount(account: string, password: string)'), 'local account registration exists')
@@ -35,6 +36,9 @@ check(store.includes('completeOnboarding(data: Pick<UserProfile'), 'first-use on
 
 const vision = read('server/api/vision.post.ts')
 check(vision.includes('region'), 'vision prompt and parser include cuisine')
+
+const recommend = read('server/api/recommend.post.ts')
+check(recommend.includes('放宽“本次不重复”约束'), 'recommendation refresh has a non-empty fallback')
 
 const card = read('components/FoodCard.vue')
 check(card.includes('v-model="food.region"'), 'food confirmation can edit region or flavor')
@@ -46,6 +50,7 @@ check(profileLogout.includes('loggingOut'), 'logout button prevents duplicate cl
 const index = read('pages/index.vue')
 check(index.includes('watch(() => diet.syncVersion'), 'homepage refreshes after records sync')
 check(index.includes('diet.cachePlan(planKey(), updated)'), 'homepage meal refresh persists the new plan')
+check(index.includes('hasCompleteMeals'), 'homepage ignores incomplete cached meal plans')
 
 const authMiddleware = read('middleware/auth.global.ts')
 check(authMiddleware.includes('diet.isAuthenticated'), 'global auth middleware protects pages')

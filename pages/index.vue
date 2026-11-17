@@ -73,7 +73,15 @@ async function fetchPlan(meals?: ('breakfast' | 'lunch' | 'dinner')[], opts?: { 
         source: res.source,
         meals: { ...plan.value.meals }
       }
-      for (const m of meals) updated.meals[m] = res.meals[m] ?? []
+      for (const m of meals) {
+        const refreshed = res.meals[m]
+        if (refreshed?.length) updated.meals[m] = refreshed
+        else {
+          // 候选不足时保留当前餐单，避免用户点击刷新后整组菜品消失。
+          updated.meals[m] = plan.value.meals[m] ?? []
+          ElMessage.info('当前人群可替换菜品不足，已保留当前餐单')
+        }
+      }
       plan.value = updated
       diet.cachePlan(planKey(), updated)
     } else {
@@ -144,7 +152,8 @@ const activePopInfo = computed(() => POP_MAP[diet.recommendationPopulation])
 
 onMounted(() => {
   const cached = diet.planCache[planKey()]
-  if (cached?.meals) {
+  const hasCompleteMeals = cached?.meals && (['breakfast', 'lunch', 'dinner'] as const).every((meal) => cached.meals[meal]?.length)
+  if (hasCompleteMeals) {
     // 有缓存：先展示上次结果（秒开），后台静默刷新为最新推荐
     plan.value = cached
     loading.value = false

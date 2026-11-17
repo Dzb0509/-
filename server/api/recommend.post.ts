@@ -118,10 +118,14 @@ function familyCandidates(meal: MealKey, members: FamilyMember[], extra: Dish[] 
 
 /** 规则引擎：按口味/地域画像与昨日重复度打分；传 role 时只选该角色（荤/素/汤/主食）的菜 */
 function rulePick(meal: MealKey, body: Body, exclude: Set<string>, role?: DishRole, extra: Dish[] = []): Dish[] {
-  const pool = uniqueDishes(body.members?.length ? familyCandidates(meal, body.members, extra) : filterDishes(body.population ?? 'balance', meal))
-    .filter((d) => !exclude.has(d.id) && allowed(d, body))
+  const allCandidates = uniqueDishes(body.members?.length ? familyCandidates(meal, body.members, extra) : filterDishes(body.population ?? 'balance', meal))
+    .filter((d) => allowed(d, body))
+  const pool = allCandidates.filter((d) => !exclude.has(d.id))
   const target = role ? pool.filter((d) => dishRole(d) === role) : pool
-  const finalPool = target.length ? target : pool // 该角色凑不出时退回全池
+  // 候选池被当前餐单全部排除时，不能返回空餐次。放宽“本次不重复”约束
+  // 作为最后兜底，仍保留人群、忌口和菜品角色约束，避免刷新后卡片消失。
+  const relaxedTarget = role ? allCandidates.filter((d) => dishRole(d) === role) : allCandidates
+  const finalPool = target.length ? target : (pool.length ? pool : (relaxedTarget.length ? relaxedTarget : allCandidates))
   const scored = finalPool.map((d) => {
     let s = Math.random() * 0.8 // 轻微随机，保证「换一换」有变化
     if (d.source === 'user') s += 3 // 用户家传菜谱优先入选
