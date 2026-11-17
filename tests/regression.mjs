@@ -27,6 +27,7 @@ for (const file of ['app.vue', 'components/FoodCard.vue', 'pages/index.vue', 'pa
 const store = read('stores/diet.ts')
 check(store.includes('invalidateRecommendations()'), 'record changes invalidate recommendation cache')
 check(store.includes('syncFromStorage()'), 'cross-tab storage sync exists')
+check(store.includes('Number.isFinite'), 'daily goals tolerate legacy numeric values')
 check(store.includes('region: dish.region'), 'recommended dishes retain cuisine')
 check(store.includes('菜系:${f.region}'), 'taste profile learns cuisine')
 check(store.includes('async registerAccount(account: string, password: string)'), 'local account registration exists')
@@ -50,5 +51,9 @@ check(authMiddleware.includes('diet.isAuthenticated'), 'global auth middleware p
 
 const profile = read('pages/profile.vue')
 check(profile.includes('aria-label="切换要编辑的用户"'), 'basic profile info has user switcher')
+
+const dietSync = read('plugins/diet-sync.client.ts')
+check(dietSync.includes('diet.syncFromStorage()'), 'diet store syncs on app startup')
+check(dietSync.includes("addEventListener('storage'"), 'diet store syncs across browser tabs')
 
 console.log(`PASS ${checks} source and template regression checks`)

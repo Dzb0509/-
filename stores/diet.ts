@@ -4,7 +4,7 @@ import type { Dish, FamilyMember, PopulationId, UserRecipe, RecommendResult } fr
 import { sumNutrition, guessMeal } from '~/types/diet'
 import { learnTaste, emptyTaste, type TasteProfile } from '~/types/taste'
 
-const STORAGE_KEY = 'shike-ai-store-v1'
+export const DIET_STORAGE_KEY = 'shike-ai-store-v1'
 
 const DEFAULT_PROFILE: UserProfile = {
   nickname: '食刻用户',
@@ -40,7 +40,7 @@ async function hashPassword(value: string): Promise<string> {
 function loadPersisted() {
   if (!import.meta.client) return null
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = localStorage.getItem(DIET_STORAGE_KEY)
     return raw ? JSON.parse(raw) : null
   } catch {
     return null
@@ -98,15 +98,24 @@ export const useDietStore = defineStore('diet', {
     /** 每日营养目标：Mifflin-St Jeor 公式估算 BMR，活动系数 1.375，按目标微调 */
     dailyGoals(state): { kcal: number; protein: number; fat: number; carb: number } {
       const p = state.profile
+      // 旧版本可能把表单数字以字符串或空值写入 localStorage。统一转换后再计算，
+      // 避免某一个字段异常导致整张目标卡显示 NaN 或继续沿用旧页面数据。
+      const numberOr = (value: unknown, fallback: number) => {
+        const parsed = Number(value)
+        return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+      }
+      const weight = numberOr(p.weight, DEFAULT_PROFILE.weight)
+      const height = numberOr(p.height, DEFAULT_PROFILE.height)
+      const age = numberOr(p.age, DEFAULT_PROFILE.age)
       const bmr =
-        10 * p.weight + 6.25 * p.height - 5 * p.age + (p.gender === 'male' ? 5 : -161)
+        10 * weight + 6.25 * height - 5 * age + (p.gender === 'female' ? -161 : 5)
       let kcal = bmr * 1.375
       if (p.goal === 'lose') kcal -= 300
       if (p.goal === 'gain') kcal += 300
-      kcal = Math.round(kcal)
-      const protein = Math.round(p.weight * 1.5)
+      kcal = Math.max(0, Math.round(kcal))
+      const protein = Math.round(weight * 1.5)
       const fat = Math.round((kcal * 0.25) / 9)
-      const carb = Math.round((kcal - protein * 4 - fat * 9) / 4)
+      const carb = Math.max(0, Math.round((kcal - protein * 4 - fat * 9) / 4))
       return { kcal, protein, fat, carb }
     },
     /** 昨日饮食记录（用于「根据昨天推荐今天/明天」） */
@@ -348,14 +357,14 @@ export const useDietStore = defineStore('diet', {
       const users = this.users.map((user) => ({ ...user, records: user.records.map(({ image, ...record }) => record) }))
       const data = { recommendationCacheVersion: 2, users, activeUserId: this.activeUserId, authAccounts: this.authAccounts, authUserId: this.authUserId, recommendationPopulation: this.recommendationPopulation, records: this.records.map(({ image, ...record }) => record), profile: this.profile, family: this.family, userRecipes: this.userRecipes, planCache: this.planCache }
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+        localStorage.setItem(DIET_STORAGE_KEY, JSON.stringify(data))
         this.storageError = ''
         this.lastSyncedAt = Date.now()
         return true
       } catch {
         // 推荐缓存可重建，优先保全用户记录。
         try {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...data, planCache: {} }))
+          localStorage.setItem(DIET_STORAGE_KEY, JSON.stringify({ ...data, planCache: {} }))
           this.planCache = {}
           this.storageError = ''
           return true
