@@ -39,16 +39,11 @@ const paused = ref(false)
 const imgOk = ref(slides.map(() => true))
 const apiUrl = useApiUrl()
 const assetUrl = useAssetUrl()
-const imgSrc = ref(slides.map((s) => `${apiUrl('/api/dish-image')}?name=${encodeURIComponent(s.img)}&v=20261030`))
-const remoteFailed = ref(slides.map(() => false))
+const remoteSrc = slides.map((s) => `${apiUrl('/api/dish-image')}?name=${encodeURIComponent(s.img)}&v=20261030`)
+const imgSrc = ref(slides.map((s) => assetUrl(s.fallback)))
 let timer: ReturnType<typeof setInterval> | null = null
 
 function onImageError(i: number) {
-  if (!remoteFailed.value[i]) {
-    remoteFailed.value[i] = true
-    imgSrc.value[i] = assetUrl(slides[i].fallback)
-    return
-  }
   imgOk.value[i] = false
 }
 
@@ -57,6 +52,12 @@ function go(i: number) {
 }
 
 onMounted(() => {
+  // 本地图先显示；远程真实图加载成功后再替换，网络受限时不会留下空白图块。
+  remoteSrc.forEach((url, i) => {
+    const probe = new Image()
+    probe.onload = () => { imgSrc.value[i] = url }
+    probe.src = url
+  })
   timer = setInterval(() => {
     if (!paused.value) go(current.value + 1)
   }, 5000)
@@ -90,7 +91,7 @@ onUnmounted(() => {
           <span class="text-[11px] text-white/60 mt-1">食刻营养小课堂 {{ i + 1 }}/{{ slides.length }} · 每 5 秒自动播放</span>
         </div>
         <!-- 图片区（真实菜品图，生成失败回退渐变） -->
-        <div class="hidden md:block relative bg-primary-50">
+        <div class="block relative bg-primary-50 min-h-[180px] md:min-h-0">
           <img
             v-if="imgOk[i]"
             :src="imgSrc[i]"

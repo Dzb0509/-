@@ -36,12 +36,19 @@ const thumbSrc = ref('')
 const heroSrc = ref('')
 
 watch(imgUrl, (url) => {
-  thumbSrc.value = url
-  heroSrc.value = url
+  // 先显示随前端上传的本地图，再尝试替换成后端真实图。
+  thumbSrc.value = fallbackImgUrl
+  heroSrc.value = fallbackImgUrl
   thumbOk.value = true
   heroOk.value = true
-  thumbLoaded.value = false
-  heroLoaded.value = false
+  thumbLoaded.value = true
+  heroLoaded.value = true
+  const probe = new Image()
+  probe.onload = () => {
+    thumbSrc.value = url
+    heroSrc.value = url
+  }
+  probe.src = url
 }, { immediate: true })
 
 function onThumbError() {
